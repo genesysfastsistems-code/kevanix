@@ -1,0 +1,28 @@
+name: Compilar APK KEVANIX
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ver archivos del repo
+        run: |
+          echo "== Contenido del repositorio =="
+          ls -la
+          test -d app || (echo "❌ FALTA la carpeta app/ — hay que subirla" && exit 1)
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compilar APK debug
+        run: gradle assembleDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KEVANIX-APK-debug
+          path: app/build/outputs/apk/debug/*.apk
