@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#1e3a8a">
 <title>KEVANIX — Sistema Educativo</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
 <style>
@@ -274,11 +275,11 @@ function seed(){
     {id:'col_3',nombre:'Escuela Defensores del Chaco',plan:'Básica',membresiaVence:'2026-07-30',activo:false,color:'#b45309',director:'Lic. Elena Vera',telefono:'595981000002',logo:null,ciudad:'Encarnación',matricula:100000},
   ];
   const usuarios=[
-    {id:'u0',colegioId:null,nombre:'Fredy (Dueño)',usuario:'dueno',pass:'1234',rol:'superadmin'},
-    {id:'u1',colegioId:cid,nombre:'Lic. Marta Suárez',usuario:'admin',pass:'1234',rol:'admin'},
-    {id:'u2',colegioId:cid,nombre:'Prof. Ricardo Gómez',usuario:'docente',pass:'1234',rol:'docente',docenteId:'d1'},
-    {id:'u3',colegioId:cid,nombre:'Sofía Martínez',usuario:'alumno',pass:'1234',rol:'alumno',alumnoId:'a1'},
-    {id:'u4',colegioId:cid,nombre:'Laura Martínez',usuario:'familia',pass:'1234',rol:'familia',alumnoId:'a1'},
+    {id:'u0',colegioId:null,nombre:'Fredy (Dueño)',usuario:'dueno',pass:'123456',rol:'superadmin'},
+    {id:'u1',colegioId:cid,nombre:'Lic. Marta Suárez',usuario:'admin',pass:'123456',rol:'admin'},
+    {id:'u2',colegioId:cid,nombre:'Prof. Ricardo Gómez',usuario:'docente',pass:'123456',rol:'docente',docenteId:'d1'},
+    {id:'u3',colegioId:cid,nombre:'Sofía Martínez',usuario:'alumno',pass:'123456',rol:'alumno',alumnoId:'a1'},
+    {id:'u4',colegioId:cid,nombre:'Laura Martínez',usuario:'familia',pass:'123456',rol:'familia',alumnoId:'a1'},
   ];
   const examenes=[
     {id:'ex1',colegioId:cid,materiaId:'m1',grado:'6to grado',fecha:'2026-07-28',hora:'08:00',tema:'Fracciones y decimales'},
@@ -316,33 +317,63 @@ const firebaseConfig = {
   appId: "1:10746163836:web:b438f7e764a72691754ff9"
 };
 let DB={colegios:[],usuarios:[],pagosMembresia:[],alumnos:[],docentes:[],materias:[],notas:[],asistencia:[],mensualidades:[],caja:[],comunicados:[],eventos:[],examenes:[],horarioClases:[],tareas:[],libros:[]};
-let fdb=null, fst=null, _cloudReady=false, _dataUnsub=[], _lastJSON={};
+let fdb=null, fst=null, _dataUnsub=[], _lastJSON={}, _regUnsub=null, _pagosUnsub=null, _superReal=null;
 const COLLS_DATA=['alumnos','docentes','materias','notas','asistencia','mensualidades','caja','comunicados','eventos','examenes','horarioClases','tareas','libros'];
 function regRef(){return fdb.collection('kevanix').doc('registry');}
+function pagosRef(){return fdb.collection('kevanix').doc('pagos');}
+function setupRef(){return fdb.collection('kevanix').doc('setup');}
+function usersCol(){return fdb.collection('users');}
 function dataRef(cidv,name){return fdb.collection('kevanix_colegios').doc(cidv).collection('data').doc(name);}
+function emailDe(usuario){return String(usuario).toLowerCase().replace(/[^a-z0-9._-]/g,'')+'@kevanix.app';}
+function secApp(){ try{return firebase.app('sec');}catch(e){return firebase.initializeApp(firebaseConfig,'sec');} }
 
 async function cloudBoot(){
   try{ firebase.initializeApp(firebaseConfig); fdb=firebase.firestore(); }
-  catch(e){ return cloudError('No se pudo iniciar Firebase. Revisá la configuración.'); }
-  try{ fst=firebase.storage(); }catch(e){ fst=null; } // Storage es opcional (plan Blaze)
-  try{
-    const reg=await regRef().get();
-    if(!reg.exists){ await cloudSeed(); }
-    regRef().onSnapshot(d=>{
-      const v=d.data()||{};
-      DB.colegios=v.colegios||[]; DB.usuarios=v.usuarios||[]; DB.pagosMembresia=v.pagosMembresia||[];
-      _lastJSON.registry=JSON.stringify({colegios:DB.colegios,usuarios:DB.usuarios,pagosMembresia:DB.pagosMembresia});
-      if(!_cloudReady){ _cloudReady=true; onCloudReady(); }
-      rerender();
-    }, err=>cloudError('Sin acceso a la base de datos. ¿Activaste Firestore en "modo de prueba"?'));
-  }catch(e){ cloudError('Error de conexión con Firestore. ¿Activaste Firestore en "modo de prueba"?'); }
+  catch(e){ return cloudError('No se pudo iniciar Firebase.'); }
+  try{ fst=firebase.storage(); }catch(e){ fst=null; }
+  try{ await ensureSeed(); }catch(e){ console.warn('seed:',e&&e.message); }
+  firebase.auth().onAuthStateChanged(async(user)=>{
+    const b=document.getElementById('bootScreen'); if(b)b.style.display='none';
+    if(!user){ mostrarLogin(); return; }
+    let prof=null;
+    try{ const d=await usersCol().doc(user.uid).get(); prof=d.exists?d.data():null; }catch(e){}
+    if(!prof){ toast('Perfil no encontrado'); await firebase.auth().signOut(); mostrarLogin(); return; }
+    session={uid:user.uid, ...prof};
+    if(prof.rol==='superadmin')_superReal=session;
+    state.colegioActivo = prof.rol==='superadmin' ? null : prof.colegioId;
+    escucharRegistro();
+    listenColegio(state.colegioActivo);
+    document.getElementById('lgErr').textContent='';
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='block';
+    buildNav(); go('home');
+  });
 }
-async function cloudSeed(){
+function mostrarLogin(){ session=null; document.getElementById('app').style.display='none'; document.getElementById('login').style.display='flex'; }
+function escucharRegistro(){
+  if(!_regUnsub) _regUnsub=regRef().onSnapshot(d=>{ DB.colegios=(d.data()||{}).colegios||[]; rerender(); });
+  if(session && session.rol==='superadmin' && !_pagosUnsub)
+    _pagosUnsub=pagosRef().onSnapshot(d=>{ DB.pagosMembresia=(d.data()||{}).items||[]; rerender(); });
+}
+async function ensureSeed(){
+  const setup=await setupRef().get();
+  if(setup.exists && setup.data().authSeeded) return;
   const s=seed();
-  await regRef().set({colegios:s.colegios,usuarios:s.usuarios,pagosMembresia:s.pagosMembresia});
+  await regRef().set({colegios:s.colegios});
+  await pagosRef().set({items:s.pagosMembresia||[]});
   for(const name of COLLS_DATA){ await dataRef('col_demo',name).set({items:s[name]||[]}); }
+  const sec=secApp();
+  for(const u of s.usuarios){
+    try{
+      const cred=await sec.auth().createUserWithEmailAndPassword(emailDe(u.usuario),u.pass);
+      const perfil={usuario:u.usuario.toLowerCase(),nombre:u.nombre,rol:u.rol,colegioId:u.colegioId||null};
+      if(u.alumnoId)perfil.alumnoId=u.alumnoId; if(u.docenteId)perfil.docenteId=u.docenteId;
+      await usersCol().doc(cred.user.uid).set(perfil);
+    }catch(e){ /* usuario ya existe */ }
+  }
+  try{ await sec.auth().signOut(); }catch(e){}
+  await setupRef().set({authSeeded:true});
 }
-function onCloudReady(){ const b=document.getElementById('bootScreen'); if(b)b.style.display='none'; document.getElementById('login').style.display='flex'; }
 function cloudError(msg){
   const b=document.getElementById('bootScreen');
   if(b)b.innerHTML=`<div style="max-width:340px;text-align:center;color:#e8edff;padding:24px">
@@ -366,15 +397,16 @@ function listenColegio(cidv){
 }
 function rerender(){ if(!session)return; if(document.getElementById('modalBg'))return; try{go(state.view);}catch(e){} }
 async function save(){
-  if(!fdb)return;
+  if(!fdb||!session)return;
   const writes=[];
   const put=(key,ref,val)=>{const j=JSON.stringify(val);if(_lastJSON[key]!==j){_lastJSON[key]=j;writes.push(ref.set(val));}};
-  put('registry',regRef(),{colegios:DB.colegios,usuarios:DB.usuarios,pagosMembresia:DB.pagosMembresia});
+  if(['admin','superadmin'].includes(session.rol)||session._super) put('registry',regRef(),{colegios:DB.colegios});
+  if(session.rol==='superadmin') put('pagos',pagosRef(),{items:DB.pagosMembresia||[]});
   const cidv=state.colegioActivo;
   if(cidv){ COLLS_DATA.forEach(name=>put(cidv+'/'+name,dataRef(cidv,name),{items:DB[name]||[]})); }
   try{ await Promise.all(writes); }catch(e){ console.error('save',e); toast('⚠️ Error al guardar en la nube'); }
 }
-function resetDB(){ if(confirm('¿Restablecer el colegio demo en la nube?')){ cloudSeed().then(()=>{toast('Datos demo restablecidos');location.reload();}); } }
+function resetDB(){ toast('Para reiniciar los datos, borralos desde la consola de Firebase.'); }
 
 /* Archivos (fotos y PDF) en Firebase Storage */
 async function uploadDataUrl(path,dataUrl){const ref=fst.ref().child(path);await ref.putString(dataUrl,'data_url');return await ref.getDownloadURL();}
@@ -386,33 +418,35 @@ let session=null;
 let state={view:'home', colegioActivo:null};
 
 const DEMO=[
-  {u:'dueno',p:'1234',r:'👑 Dueño / Super usuario'},
-  {u:'admin',p:'1234',r:'🏫 Administración'},
-  {u:'docente',p:'1234',r:'👩‍🏫 Docente'},
-  {u:'familia',p:'1234',r:'👨‍👩‍👧 Familia'},
-  {u:'alumno',p:'1234',r:'🎒 Alumno'},
+  {u:'dueno',p:'123456',r:'👑 Dueño / Super usuario'},
+  {u:'admin',p:'123456',r:'🏫 Administración'},
+  {u:'docente',p:'123456',r:'👩‍🏫 Docente'},
+  {u:'familia',p:'123456',r:'👨‍👩‍👧 Familia'},
+  {u:'alumno',p:'123456',r:'🎒 Alumno'},
 ];
 function renderDemo(){
   document.getElementById('demoList').innerHTML=DEMO.map(d=>
     `<div class="du" onclick="prefill('${d.u}')"><span>${d.r}</span><b>${d.u} / ${d.p}</b></div>`).join('');
 }
-function prefill(u){document.getElementById('lgUser').value=u;document.getElementById('lgPass').value='1234';}
+function prefill(u){document.getElementById('lgUser').value=u;document.getElementById('lgPass').value='123456';}
 
-function doLogin(){
-  const u=document.getElementById('lgUser').value.trim().toLowerCase();
+async function doLogin(){
+  const u=document.getElementById('lgUser').value.trim();
   const p=document.getElementById('lgPass').value;
-  const user=DB.usuarios.find(x=>x.usuario.toLowerCase()===u&&x.pass===p);
-  if(!user){document.getElementById('lgErr').textContent='Usuario o contraseña incorrectos';return;}
-  session=user;
-  state.colegioActivo = user.rol==='superadmin' ? null : user.colegioId;
-  listenColegio(state.colegioActivo);
-  document.getElementById('lgErr').textContent='';
-  document.getElementById('login').style.display='none';
-  document.getElementById('app').style.display='block';
-  buildNav();
-  go('home');
+  if(!u||!p){document.getElementById('lgErr').textContent='Completá usuario y contraseña';return;}
+  document.getElementById('lgErr').style.color='var(--muted)';
+  document.getElementById('lgErr').textContent='Ingresando…';
+  try{
+    await firebase.auth().signInWithEmailAndPassword(emailDe(u),p);
+    // onAuthStateChanged se encarga del resto
+  }catch(e){
+    document.getElementById('lgErr').style.color='var(--bad)';
+    document.getElementById('lgErr').textContent='Usuario o contraseña incorrectos';
+  }
 }
-function logout(){session=null;document.getElementById('app').style.display='none';document.getElementById('login').style.display='flex';document.getElementById('lgUser').value='';document.getElementById('lgPass').value='';}
+function logout(){ try{firebase.auth().signOut();}catch(e){} document.getElementById('lgUser').value='';document.getElementById('lgPass').value='';
+  if(_regUnsub){try{_regUnsub();}catch(e){}_regUnsub=null;} if(_pagosUnsub){try{_pagosUnsub();}catch(e){}_pagosUnsub=null;}
+  _dataUnsub.forEach(u=>{try{u();}catch(e){}});_dataUnsub=[]; }
 
 /* ---------------- DATA HELPERS (scoped a colegio) ---------------- */
 function cid(){return state.colegioActivo;}
@@ -650,16 +684,28 @@ function modalColegio(){
     <div class="field"><label>Contraseña</label><input id="f_pass" placeholder="clave de acceso" autocomplete="off"></div>
     <button class="btn" onclick="guardarColegio()">Crear membresía y usuario</button>`);
 }
-function guardarColegio(){
+async function guardarColegio(){
   const nom=val('f_nom');if(!nom)return toast('Ingresá el nombre');
   const usuario=val('f_user').toLowerCase();const pass=val('f_pass');
   if(!usuario||!pass)return toast('Ingresá usuario y contraseña');
-  if(DB.usuarios.some(u=>u.usuario.toLowerCase()===usuario))return toast('Ese usuario ya existe, elegí otro');
+  if(pass.length<6)return toast('La contraseña debe tener al menos 6 caracteres');
   const plan=val('f_plan');
   const d=new Date();d.setFullYear(d.getFullYear()+1);
   const nuevoId=uid('col');
+  let uidNuevo;
+  toast('Creando cuenta de acceso…');
+  try{
+    const sec=secApp();
+    const cred=await sec.auth().createUserWithEmailAndPassword(emailDe(usuario),pass);
+    uidNuevo=cred.user.uid;
+    try{await sec.auth().signOut();}catch(e){}
+  }catch(e){
+    if(e&&e.code==='auth/email-already-in-use')return toast('Ese usuario ya existe, elegí otro');
+    return toast('No se pudo crear el usuario: '+((e&&e.message)||''));
+  }
+  try{ await usersCol().doc(uidNuevo).set({usuario,nombre:val('f_dir')||nom,rol:'admin',colegioId:nuevoId}); }
+  catch(e){ return toast('No se pudo guardar el perfil del usuario'); }
   DB.colegios.push({id:nuevoId,nombre:nom,plan,membresiaVence:d.toISOString().slice(0,10),activo:true,color:'#1e3a8a',director:val('f_dir'),telefono:val('f_tel'),logo:null,matricula:150000});
-  DB.usuarios.push({id:uid('u'),colegioId:nuevoId,nombre:val('f_dir')||nom,usuario,pass,rol:'admin'});
   save();closeModal();
   toast('✅ Membresía creada · usuario: '+usuario);
   go('colegios');
@@ -1311,7 +1357,7 @@ function guardarTarea(){
   save();closeModal();toast('✅ Tarea publicada para los alumnos');go('tareas');
 }
 function borrarTarea(id){DB.tareas=DB.tareas.filter(t=>t.id!==id);save();go('tareas');}
-function volverSuper(){session=DB.usuarios.find(u=>u.rol==='superadmin');state.colegioActivo=null;listenColegio(null);buildNav();go('home');}
+function volverSuper(){if(_superReal)session=_superReal;state.colegioActivo=null;listenColegio(null);buildNav();go('home');}
 
 function vInstitucion(el){
   head('Institución');
