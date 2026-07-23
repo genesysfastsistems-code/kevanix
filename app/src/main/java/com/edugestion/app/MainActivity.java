@@ -34,7 +34,9 @@ import java.io.OutputStream;
 public class MainActivity extends AppCompatActivity {
 
     private WebView web;
-    private static final String HOME = "file:///android_asset/www/index.html";
+    // Carga la versión EN LÍNEA (GitHub Pages). Así el APK se actualiza solo con la web.
+    private static final String HOME = "https://genesysfastsistems-code.github.io/kevanix/";
+    private static final String APP_HOST = "genesysfastsistems-code.github.io";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,12 +70,23 @@ public class MainActivity extends AppCompatActivity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
-                String url = req.getUrl().toString();
-                if (url.startsWith("http") && url.contains("wa.me")) { openExternal(url); return true; }
-                if (url.startsWith("whatsapp:") || url.startsWith("tel:")
-                    || url.startsWith("mailto:") || url.startsWith("sms:")) { openExternal(url); return true; }
-                if (url.startsWith("file://")) return false; // navegación interna
-                if (url.startsWith("http")) { openExternal(url); return true; }
+                Uri u = req.getUrl();
+                String url = u.toString();
+                String scheme = u.getScheme() == null ? "" : u.getScheme();
+                String host = u.getHost() == null ? "" : u.getHost();
+                // Esquemas externos (WhatsApp, teléfono, mail)
+                if (scheme.equals("whatsapp") || scheme.equals("tel") || scheme.equals("mailto")
+                    || scheme.equals("sms") || scheme.equals("intent")) { openExternal(url); return true; }
+                if (host.contains("wa.me")) { openExternal(url); return true; }
+                // La propia app y la infraestructura de Firebase/Google: cargar dentro del WebView
+                if (host.equals(APP_HOST) || host.isEmpty()
+                    || host.endsWith("gstatic.com") || host.endsWith("googleapis.com")
+                    || host.endsWith("google.com") || host.endsWith("firebaseio.com")
+                    || host.endsWith("firebaseapp.com") || host.endsWith("cloudfunctions.net")) {
+                    return false;
+                }
+                // Cualquier otro enlace externo (ej: PDFs de la biblioteca en Drive) -> abrir afuera
+                if (scheme.startsWith("http")) { openExternal(url); return true; }
                 return false;
             }
         });
