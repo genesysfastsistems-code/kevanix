@@ -299,12 +299,7 @@ function seed(){
     {id:'t1',colegioId:cid,materiaId:'m1',grado:'6to grado',docenteId:'d1',titulo:'Ejercicios de fracciones',descripcion:'Resolver los ejercicios 1 al 10 de la página 45. Traer en carpeta.',fecha:hoy(),entrega:'2026-07-26'},
     {id:'t2',colegioId:cid,materiaId:'m2',grado:'6to grado',docenteId:'d2',titulo:'Lectura: "El principito"',descripcion:'Leer los capítulos 1 a 3 y escribir un resumen de media carilla.',fecha:hoy(),entrega:'2026-07-29'},
   ];
-  const libros=[
-    {id:'l1',colegioId:cid,titulo:'Manual de Matemática 6°',categoria:'Matemática',materiaId:'m1',autor:'Editorial MEC',fecha:hoy(),fileUrl:null},
-    {id:'l2',colegioId:cid,titulo:'Antología de Lectura',categoria:'Comunicación',materiaId:'m2',autor:'Editorial MEC',fecha:hoy(),fileUrl:null},
-    {id:'l3',colegioId:cid,titulo:'Ciencias Naturales 6°',categoria:'Ciencias',materiaId:'m3',autor:'Editorial MEC',fecha:hoy(),fileUrl:null},
-  ];
-  return {colegios,usuarios,alumnos,docentes,materias,notas,asistencia,mensualidades,caja,comunicados,eventos,pagosMembresia:[],examenes,horarioClases,tareas,libros};
+  return {colegios,usuarios,alumnos,docentes,materias,notas,asistencia,mensualidades,caja,comunicados,eventos,pagosMembresia:[],examenes,horarioClases,tareas};
 }
 
 /* ==================== NUBE (Firebase) ==================== */
@@ -318,7 +313,7 @@ const firebaseConfig = {
 };
 let DB={colegios:[],usuarios:[],pagosMembresia:[],alumnos:[],docentes:[],materias:[],notas:[],asistencia:[],mensualidades:[],caja:[],comunicados:[],eventos:[],examenes:[],horarioClases:[],tareas:[],libros:[]};
 let fdb=null, fst=null, _dataUnsub=[], _lastJSON={}, _regUnsub=null, _pagosUnsub=null, _superReal=null;
-const COLLS_DATA=['alumnos','docentes','materias','notas','asistencia','mensualidades','caja','comunicados','eventos','examenes','horarioClases','tareas','libros'];
+const COLLS_DATA=['alumnos','docentes','materias','notas','asistencia','mensualidades','caja','comunicados','eventos','examenes','horarioClases','tareas'];
 function regRef(){return fdb.collection('kevanix').doc('registry');}
 function pagosRef(){return fdb.collection('kevanix').doc('pagos');}
 function setupRef(){return fdb.collection('kevanix').doc('setup');}
@@ -384,7 +379,7 @@ function cloudError(msg){
 }
 function listenColegio(cidv){
   _dataUnsub.forEach(u=>{try{u();}catch(e){}}); _dataUnsub=[];
-  COLLS_DATA.forEach(n=>{DB[n]=[];});
+  COLLS_DATA.forEach(n=>{DB[n]=[];}); DB.usuarios=[];
   if(!cidv)return;
   COLLS_DATA.forEach(name=>{
     const u=dataRef(cidv,name).onSnapshot(d=>{
@@ -394,6 +389,13 @@ function listenColegio(cidv){
     });
     _dataUnsub.push(u);
   });
+  // Lista de usuarios del colegio (solo admin/dueño pueden leerla)
+  if(session && (['admin','superadmin'].includes(session.rol)||session._super)){
+    const uu=usersCol().where('colegioId','==',cidv).onSnapshot(s=>{
+      DB.usuarios=s.docs.map(d=>({uid:d.id,...d.data()})); rerender();
+    },e=>{});
+    _dataUnsub.push(uu);
+  }
 }
 function rerender(){ if(!session)return; if(document.getElementById('modalBg'))return; try{go(state.view);}catch(e){} }
 async function save(){
@@ -460,10 +462,10 @@ function toast(msg){const t=document.createElement('div');t.className='toast';t.
 /* ---------------- NAV por rol ---------------- */
 const NAV={
   superadmin:[['home','Panel','📊'],['colegios','Colegios','🏫'],['membresias','Membresías','💳'],['config','Ajustes','⚙️']],
-  admin:[['home','Inicio','🏠'],['academico','Académico','📚'],['finanzas','Finanzas','💰'],['biblioteca','Biblioteca','📚'],['mas','Más','⋯']],
-  docente:[['home','Inicio','🏠'],['notas','Notas','📝'],['tareas','Tareas','📋'],['biblioteca','Libros','📚'],['mas','Más','⋯']],
+  admin:[['home','Inicio','🏠'],['academico','Académico','📚'],['finanzas','Finanzas','💰'],['comunicados','Avisos','📢'],['mas','Más','⋯']],
+  docente:[['home','Inicio','🏠'],['notas','Notas','📝'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['mas','Más','⋯']],
   familia:[['home','Inicio','🏠'],['boletin','Boletín','📄'],['tareas','Tareas','📋'],['pagos','Pagos','💰'],['mas','Más','⋯']],
-  alumno:[['home','Inicio','🏠'],['tareas','Tareas','📋'],['biblioteca','Libros','📚'],['examenes','Exámenes','📝'],['mas','Más','⋯']],
+  alumno:[['home','Inicio','🏠'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['boletin','Boletín','📄'],['mas','Más','⋯']],
 };
 function buildNav(){
   const items=NAV[session.rol]||NAV.admin;
@@ -483,7 +485,7 @@ function go(view){
     notas:vNotas, asistencia:vAsistencia, finanzas:vFinanzas, mensualidades:vMensualidades,
     caja:vCaja, deuda:vDeuda, faltas:vFaltas, comunicados:vComunicados, boletin:vBoletin,
     pagos:vPagos, horario:vHorario, calendario:vCalendario, mas:vMas, config:vConfig,
-    institucion:vInstitucion, biblioteca:vBiblioteca, examenes:vExamenes, tareas:vTareas
+    institucion:vInstitucion, examenes:vExamenes, tareas:vTareas, usuarios:vUsuarios
   };
   const fn=R[view]||vHome;
   window.scrollTo(0,0);
@@ -564,7 +566,7 @@ function vHomeAdmin(el){
       ${tile('mensualidades','💰','Mensualidades','Cobros')}
       ${tile('deuda','🔴','Deudas','Morosidad')}
       ${tile('caja','🧾','Caja','Ingresos/egresos')}
-      ${tile('biblioteca','📚','Biblioteca','Libros PDF')}
+      ${tile('usuarios','👥','Usuarios','Docentes y familias')}
       ${tile('tareas','📋','Tareas','Deberes')}
       ${tile('examenes','📝','Exámenes','Horario')}
       ${tile('horario','🕐','Horario','Clases')}
@@ -593,7 +595,6 @@ function vHomeDocente(el){
       ${tile('asistencia','✓','Tomar asistencia','Del día')}
       ${tile('tareas','📋','Tareas','Cargar deberes')}
       ${tile('examenes','📝','Exámenes','Programar')}
-      ${tile('biblioteca','📚','Biblioteca','Subir libros')}
       ${tile('horario','🕐','Horario','Clases')}
     </div>`;
 }
@@ -627,7 +628,6 @@ function vHomeFamilia(el){
     <div class="menu-grid">
       ${tile('boletin','📄','Boletín','Calificaciones')}
       ${tile('tareas','📋','Tareas','Deberes')}
-      ${tile('biblioteca','📚','Biblioteca','Libros PDF')}
       ${tile('examenes','📝','Exámenes','Horario')}
       ${tile('horario','🕐','Horario','Clases')}
       ${tile('pagos','💰','Pagos','Cuotas')}
@@ -654,7 +654,7 @@ function verColegio(id){
     ${(()=>{const pagos=(DB.pagosMembresia||[]).filter(p=>p.colegioId===id).slice().reverse();
       const totalPag=pagos.reduce((s,p)=>s+p.monto,0);
       return `<div class="sectionlabel">Historial de pagos de membresía</div>
-      ${pagos.length?pagos.map(p=>`<div class="kv"><span>${fmtFecha(p.fecha)} · ${p.plan} (${p.modalidad})</span><b>${money(p.monto)}</b></div>`).join(''):'<div class="muted" style="font-size:13px;padding:4px 0">Sin pagos registrados</div>'}
+      ${pagos.length?pagos.map(p=>`<div class="kv"><span>${fmtFecha(p.fecha)} · ${p.plan} (${p.modalidad})</span><b>${money(p.monto)} <button class="btn sm sec" style="margin-left:6px" onclick="reciboMembresiaById('${id}','${p.id}')">🧾</button></b></div>`).join(''):'<div class="muted" style="font-size:13px;padding:4px 0">Sin pagos registrados</div>'}
       ${pagos.length?`<div class="kv"><span><b>Total cobrado</b></span><b style="color:var(--ok)">${money(totalPag)}</b></div>`:''}`;})()}
     <div style="height:14px"></div>
     <div class="row">
@@ -761,8 +761,32 @@ function venderMembresia(){
   else{monto=precio;base.setMonth(base.getMonth()+1);}
   c.plan=plan;c.activo=true;c.membresiaVence=base.toISOString().slice(0,10);
   DB.pagosMembresia=DB.pagosMembresia||[];
-  DB.pagosMembresia.push({id:uid('pm'),colegioId:c.id,fecha:hoy(),plan,modalidad:mod,monto});
-  save();toast('✅ Pago '+(mod==='anual'?'anual':'mensual')+' registrado · '+money(monto));go('membresias');
+  const pago={id:uid('pm'),colegioId:c.id,fecha:hoy(),plan,modalidad:mod,monto};
+  DB.pagosMembresia.push(pago);
+  save();toast('✅ Pago '+(mod==='anual'?'anual':'mensual')+' registrado · '+money(monto));
+  pdfReciboMembresia(c,pago);
+  go('membresias');
+}
+function reciboMembresiaById(cidv,pagoId){const c=colegio(cidv);const p=(DB.pagosMembresia||[]).find(x=>x.id===pagoId);if(c&&p)pdfReciboMembresia(c,p);}
+function pdfReciboMembresia(c,pago){
+  const doc=makeDoc();
+  doc.setFillColor(30,58,138);doc.rect(0,0,210,28,'F');
+  doc.setTextColor(255);doc.setFontSize(15);doc.setFont(undefined,'bold');doc.text('KEVANIX — Sistema Educativo',14,12);
+  doc.setFontSize(11);doc.setFont(undefined,'normal');doc.text('Recibo de membresía',14,21);doc.setTextColor(0);
+  const nro=String(nuevoRecibo()).padStart(5,'0');let y=40;
+  doc.setFontSize(12);doc.setFont(undefined,'bold');doc.text('RECIBO N°: '+nro,14,y);
+  doc.setFont(undefined,'normal');doc.setFontSize(11);doc.text('Fecha: '+fmtFecha(pago.fecha),150,y);y+=12;
+  const kv=(k,v)=>{doc.setFont(undefined,'bold');doc.text(k,14,y);doc.setFont(undefined,'normal');doc.text(String(v),60,y);y+=8;};
+  kv('Institución:',c.nombre);
+  kv('Plan:',pago.plan);
+  kv('Modalidad:',pago.modalidad==='anual'?'Anual (2 meses gratis)':'Mensual');
+  kv('Vence:',fmtFecha(c.membresiaVence));
+  y+=5;doc.setFillColor(240,244,255);doc.rect(14,y-6,182,14,'F');
+  doc.setFont(undefined,'bold');doc.setFontSize(14);doc.text('TOTAL PAGADO:',18,y+3);doc.text(moneyG(pago.monto),150,y+3);y+=19;
+  doc.setFont(undefined,'normal');doc.setFontSize(10);doc.text('Son: '+numeroALetras(pago.monto)+' guaraníes.',14,y);y+=22;
+  doc.setDrawColor(120);doc.line(120,y,190,y);y+=6;doc.text('Recibí conforme',138,y);
+  doc.setFontSize(8);doc.setTextColor(120);doc.text('KEVANIX · Tecnología que conecta · '+fmtFecha(pago.fecha),14,285);
+  doc.save('Recibo_Membresia_'+nro+'.pdf');toast('🧾 Recibo N° '+nro);
 }
 
 /* -------- ACADÉMICO (admin) -------- */
@@ -1208,7 +1232,6 @@ function guardarEvento(){const t=val('ev_tit');if(!t)return toast('Ingresá el t
 function vMas(el){
   head('Más opciones');
   const T={
-    biblioteca:tile('biblioteca','📚','Biblioteca','Libros PDF'),
     examenes:tile('examenes','📝','Exámenes','Horario de exámenes'),
     horario:tile('horario','🕐','Horario','Clases por grado'),
     tareas:tile('tareas','📋','Tareas','Trabajos y deberes'),
@@ -1216,16 +1239,17 @@ function vMas(el){
     calendario:tile('calendario','📅','Calendario','Eventos'),
     asistencia:tile('asistencia','✓','Asistencia','Tomar asistencia'),
     faltas:tile('faltas','📋','Reporte faltas','Inasistencias'),
-    institucion:tile('institucion','🏫','Institución','Nombre y logo'),
+    institucion:tile('institucion','🏫','Institución','Datos y logo'),
+    usuarios:tile('usuarios','👥','Usuarios','Docentes, familias, alumnos'),
     boletin:tile('boletin','📄','Boletín','Calificaciones'),
     pagos:tile('pagos','💰','Pagos','Cuotas'),
     config:tile('config','⚙️','Ajustes','Configuración'),
   };
   const sets={
-    admin:['biblioteca','examenes','horario','tareas','calendario','faltas','institucion','config'],
-    docente:['tareas','biblioteca','examenes','horario','asistencia','comunicados'],
-    alumno:['biblioteca','examenes','horario','boletin','comunicados'],
-    familia:['biblioteca','examenes','horario','tareas','comunicados','config'],
+    admin:['usuarios','institucion','examenes','horario','tareas','calendario','faltas','config'],
+    docente:['tareas','examenes','horario','asistencia','comunicados'],
+    alumno:['examenes','horario','boletin','comunicados'],
+    familia:['examenes','horario','tareas','comunicados','config'],
   };
   const items=(sets[session.rol]||sets.admin).map(k=>T[k]).join('');
   el.innerHTML=`<div class="pagetitle">Más</div><div class="menu-grid">${items}</div>
@@ -1233,53 +1257,69 @@ function vMas(el){
 }
 
 /* ============================================================
-   BIBLIOTECA (libros PDF)
+   USUARIOS Y ACCESOS (el admin crea docentes/familias/alumnos)
    ============================================================ */
-function vBiblioteca(el){
-  head('Biblioteca');
-  const puedeCargar=['admin','docente','superadmin'].includes(session.rol);
-  const libros=q('libros');
-  const cats=[...new Set(libros.map(l=>l.categoria||'General'))];
-  const filtro=window._bibFiltro||'Todas';
-  const lista=filtro==='Todas'?libros:libros.filter(l=>(l.categoria||'General')===filtro);
-  el.innerHTML=`<div class="pagetitle">📚 Biblioteca</div>
-    <div style="overflow-x:auto;white-space:nowrap;margin-bottom:12px">
-      <span class="chip ${filtro==='Todas'?'active':''}" onclick="window._bibFiltro='Todas';go('biblioteca')">Todas</span>
-      ${cats.map(c=>`<span class="chip ${filtro===c?'active':''}" onclick="window._bibFiltro='${c.replace(/'/g,'')}';go('biblioteca')">${c}</span>`).join('')}
-    </div>
-    <div class="list">${lista.map(l=>`<div class="li" onclick="leerLibro('${l.id}')">
-      <div class="av" style="background:${l.fileUrl?'#dcfce7':'#eef2ff'};color:${l.fileUrl?'#166534':'#64748b'}">${l.fileUrl?'📕':'📄'}</div>
-      <div class="tx"><b>${l.titulo}</b><small>${l.categoria||'General'} · ${l.autor||''}${l.fileUrl?'':' · (sin link)'}</small></div>
-      <div class="rt">${puedeCargar?`<button class="btn sm bad" onclick="event.stopPropagation();borrarLibro('${l.id}')">✕</button>`:'📖'}</div>
-    </div>`).join('')||empty('Sin libros','Cargá el primer libro con el botón +')}</div>
-    ${puedeCargar?`<button class="fab" onclick="modalLibro()">+</button>`:''}`;
+function vUsuarios(el){
+  head('Usuarios y accesos');
+  if(!['admin','superadmin'].includes(session.rol)){el.innerHTML=empty('Sin acceso');return;}
+  const us=(DB.usuarios||[]).filter(u=>u.rol!=='admin'&&u.rol!=='superadmin');
+  const rolLbl={docente:'👩‍🏫 Docente',familia:'👨‍👩‍👧 Familia',alumno:'🎒 Alumno'};
+  el.innerHTML=`<div class="pagetitle">Usuarios y accesos</div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Creá las cuentas de acceso de tus docentes, familias y alumnos.</div>
+    <div class="list">${us.map(u=>`<div class="li">
+      <div class="av">${(u.nombre||u.usuario||'?')[0].toUpperCase()}</div>
+      <div class="tx"><b>${u.nombre||u.usuario}</b><small>${rolLbl[u.rol]||u.rol} · usuario: ${u.usuario}</small></div>
+      <button class="btn sm bad" onclick="borrarCuenta('${u.uid}')">✕</button></div>`).join('')||empty('Sin cuentas creadas','Tocá + para crear la primera')}</div>
+    <button class="fab" onclick="modalCuenta()">+</button>`;
 }
-function modalLibro(){
-  const mats=q('materias');
-  modal(`<div class="modal-head"><h2>Cargar libro PDF</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
-    <div class="field"><label>Título</label><input id="lb_tit"></div>
-    <div class="field"><label>Categoría / Materia</label><input id="lb_cat" list="lb_cats" placeholder="Ej: Matemática"><datalist id="lb_cats">${[...new Set(mats.map(m=>m.nombre))].map(n=>`<option value="${n}">`).join('')}</datalist></div>
-    <div class="field"><label>Autor / Editorial (opcional)</label><input id="lb_aut"></div>
-    <div class="field"><label>Link del PDF</label><input id="lb_url" placeholder="https://... (Google Drive, Dropbox, etc.)"></div>
-    <div class="muted" style="font-size:11.5px;margin:-4px 0 12px 2px">Subí el PDF a Google Drive → "Compartir" → "Cualquiera con el enlace" → copiá el link y pegalo acá.</div>
-    <button class="btn" onclick="guardarLibro()">Guardar libro</button>`);
+function modalCuenta(){
+  modal(`<div class="modal-head"><h2>Nueva cuenta de acceso</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Tipo de cuenta</label><select id="cu_tipo" onchange="cuLink()">
+      <option value="docente">👩‍🏫 Docente</option>
+      <option value="familia">👨‍👩‍👧 Familia (padre/madre/tutor)</option>
+      <option value="alumno">🎒 Alumno</option>
+    </select></div>
+    <div class="field" id="cu_linkWrap"></div>
+    <div class="field"><label>Usuario (para ingresar)</label><input id="cu_user" placeholder="ej: mariaprof" autocomplete="off"></div>
+    <div class="field"><label>Contraseña (mínimo 6)</label><input id="cu_pass" placeholder="clave de acceso" autocomplete="off"></div>
+    <button class="btn" onclick="crearCuentaUsuario()">Crear cuenta</button>`);
+  cuLink();
 }
-function guardarLibro(){
-  const tit=val('lb_tit');if(!tit)return toast('Ingresá el título');
-  let url=val('lb_url').trim();
-  if(url&&!/^https?:\/\//i.test(url))return toast('El link debe empezar con http:// o https://');
-  DB.libros.push({id:uid('l'),colegioId:cid(),titulo:tit,categoria:val('lb_cat')||'General',autor:val('lb_aut'),fecha:hoy(),fileUrl:url||null});
-  save();closeModal();toast(url?'📕 Libro agregado':'Libro agregado (sin link)');go('biblioteca');
+function cuLink(){
+  const tipo=val('cu_tipo');const w=document.getElementById('cu_linkWrap');if(!w)return;
+  if(tipo==='docente'){
+    const ds=q('docentes');
+    w.innerHTML=`<label>Docente</label>`+(ds.length?`<select id="cu_link">${ds.map(d=>`<option value="${d.id}">${d.nombre}</option>`).join('')}</select>`:`<div class="muted" style="font-size:12px">No hay docentes. Cargalos primero en Académico → Docentes.</div>`);
+  }else{
+    const als=q('alumnos');
+    w.innerHTML=`<label>Alumno</label>`+(als.length?`<select id="cu_link">${als.map(a=>`<option value="${a.id}">${a.nombre} — ${a.grado}</option>`).join('')}</select>`:`<div class="muted" style="font-size:12px">No hay alumnos. Cargalos primero en Académico → Alumnos.</div>`);
+  }
 }
-function leerLibro(id){
-  const l=DB.libros.find(x=>x.id===id);if(!l)return;
-  if(!l.fileUrl)return toast('Este libro no tiene link. Editá y agregá el link del PDF.');
-  if(window.AndroidPDF){ // APK: abrir con el navegador/lector del celular
-    const a=document.createElement('a');a.href=l.fileUrl;a.target='_blank';document.body.appendChild(a);a.click();a.remove();
-  }else{ window.open(l.fileUrl,'_blank'); }
+async function crearCuentaUsuario(){
+  const tipo=val('cu_tipo');const usuario=val('cu_user').toLowerCase();const pass=val('cu_pass');
+  if(!usuario||!pass)return toast('Ingresá usuario y contraseña');
+  if(pass.length<6)return toast('La contraseña debe tener al menos 6 caracteres');
+  const linkEl=document.getElementById('cu_link');if(!linkEl)return toast('Cargá primero docentes/alumnos');
+  const perfil={usuario,colegioId:cid()};
+  if(tipo==='docente'){const d=docente(linkEl.value);if(!d)return toast('Elegí un docente');perfil.rol='docente';perfil.docenteId=d.id;perfil.nombre=d.nombre;}
+  else if(tipo==='alumno'){const a=alumno(linkEl.value);if(!a)return toast('Elegí un alumno');perfil.rol='alumno';perfil.alumnoId=a.id;perfil.nombre=a.nombre;}
+  else{const a=alumno(linkEl.value);if(!a)return toast('Elegí un alumno');perfil.rol='familia';perfil.alumnoId=a.id;perfil.nombre=a.tutor||('Familia de '+a.nombre);}
+  toast('Creando cuenta…');
+  try{
+    const sec=secApp();
+    const cred=await sec.auth().createUserWithEmailAndPassword(emailDe(usuario),pass);
+    await usersCol().doc(cred.user.uid).set(perfil);
+    try{await sec.auth().signOut();}catch(e){}
+  }catch(e){
+    if(e&&e.code==='auth/email-already-in-use')return toast('Ese usuario ya existe, elegí otro');
+    return toast('No se pudo crear: '+((e&&e.message)||''));
+  }
+  closeModal();toast('✅ Cuenta creada: '+usuario);go('usuarios');
 }
-function borrarLibro(id){
-  DB.libros=DB.libros.filter(x=>x.id!==id);save();toast('Libro eliminado');go('biblioteca');
+async function borrarCuenta(uidv){
+  if(!confirm('¿Quitar el acceso de este usuario?'))return;
+  try{ await usersCol().doc(uidv).delete(); toast('Acceso eliminado'); }catch(e){ toast('No se pudo eliminar'); }
+  go('usuarios');
 }
 
 /* ============================================================
@@ -1375,15 +1415,22 @@ function vInstitucion(el){
       <div class="field"><label>Ciudad</label><input id="i_ciu" value="${(c.ciudad||'').replace(/"/g,'&quot;')}" placeholder="Ej: Asunción"></div>
       <div class="field"><label>Director/a</label><input id="i_dir" value="${(c.director||'').replace(/"/g,'&quot;')}"></div>
       <div class="field"><label>Teléfono (con código país)</label><input id="i_tel" value="${(c.telefono||'').replace(/"/g,'&quot;')}" placeholder="595981..."></div>
+      <div class="field"><label>Dirección</label><input id="i_dir2" value="${(c.direccion||'').replace(/"/g,'&quot;')}" placeholder="Calle y número"></div>
+      <div class="field"><label>Correo</label><input id="i_mail" value="${(c.email||'').replace(/"/g,'&quot;')}" placeholder="colegio@correo.com"></div>
+      <div class="field"><label>Monto de matrícula (₲)</label><input id="i_mat" type="number" value="${c.matricula||''}" placeholder="Ej: 150000"></div>
+      <div class="field"><label>Cuota mensual sugerida (₲)</label><input id="i_cuota" type="number" value="${c.cuota||''}" placeholder="Ej: 350000"></div>
       <button class="btn" onclick="guardarInstitucion()">Guardar datos</button>
     </div>
-    <div class="muted" style="font-size:12px;text-align:center">El logo aparece en la barra superior de la app. El nombre de la institución aparece en la barra y en todos los reportes PDF.</div>`;
+    <div class="muted" style="font-size:12px;text-align:center">El logo y el nombre aparecen en la barra superior y en todos los reportes y recibos PDF.</div>`;
 }
 function pickLogo(inp){readImage(inp.files[0],300,d=>{if(!d)return toast('No se pudo leer la imagen');window._logoTmp=d;const p=document.getElementById('logoPrev');p.style.background="#eef2ff url('"+d+"') center/cover";p.textContent='';});}
 function guardarInstitucion(){
   const c=colegio();if(!c)return;
   const nom=val('i_nom');if(!nom)return toast('Ingresá el nombre de la institución');
   c.nombre=nom;c.ciudad=val('i_ciu');c.director=val('i_dir');c.telefono=val('i_tel');c.logo=window._logoTmp||null;
+  c.direccion=val('i_dir2');c.email=val('i_mail');
+  const mm=parseFloat(val('i_mat'));if(!isNaN(mm))c.matricula=mm;
+  const cq=parseFloat(val('i_cuota'));if(!isNaN(cq))c.cuota=cq;
   window._logoTmp=null;save();toast('Datos de la institución guardados');go('home');
 }
 
@@ -1396,11 +1443,11 @@ function vConfig(el){
       ${colegio()?`<div class="kv"><span>Institución</span><b>${colName()}</b></div>`:''}
       <div class="kv"><span>Versión</span><b>KEVANIX 1.0</b></div>
     </div>
-    ${['admin','superadmin'].includes(session.rol)&&colegio()?`<button class="btn sec" onclick="go('institucion')">🏫 Editar institución (nombre y logo)</button><div style="height:12px"></div>`:''}
-    <div class="card"><h3>Datos de demostración</h3>
-      <p class="muted" style="font-size:13px;margin:0 0 10px">Los datos se guardan en este dispositivo. Podés restablecerlos a los valores originales.</p>
-      <button class="btn warn" onclick="resetDB()">↺ Restablecer datos demo</button>
-    </div>
+    ${['admin','superadmin'].includes(session.rol)&&colegio()?`
+      <button class="btn sec" onclick="go('institucion')">🏫 Datos de la institución (todos los datos y logo)</button>
+      <div style="height:8px"></div>
+      <button class="btn sec" onclick="go('usuarios')">👥 Usuarios y accesos (docentes, familias, alumnos)</button>
+      <div style="height:12px"></div>`:''}
     <button class="btn bad" onclick="logout()">Cerrar sesión</button>`;
 }
 
