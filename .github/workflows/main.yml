@@ -15,21 +15,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Preparar keystore
-        run: |
-          echo -n "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '[:space:]' > ks.b64
-          echo "Longitud base64: $(wc -c < ks.b64)  (deberia ser 3684)"
-          base64 -d ks.b64 > "$RUNNER_TEMP/kevanix.jks"
-          echo "Tamano keystore: $(wc -c < "$RUNNER_TEMP/kevanix.jks") bytes  (deberia ser 2762)"
-      - name: Compilar APK firmado
-        env:
-          KEYSTORE_FILE: ${{ runner.temp }}/kevanix.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease --no-daemon --stacktrace
-      - name: Subir APK firmado
+      - name: Compilar APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Subir APK
         uses: actions/upload-artifact@v4
         with:
-          name: KEVANIX-APK-firmado
-          path: app/build/outputs/apk/release/*.apk
+          name: KEVANIX-APK
+          path: app/build/outputs/apk/debug/*.apk
