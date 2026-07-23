@@ -7,11 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Ver archivos del repo
-        run: |
-          echo "== Contenido del repositorio =="
-          ls -la
-          test -d app || (echo "❌ FALTA la carpeta app/ — hay que subirla" && exit 1)
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -20,9 +15,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Compilar APK debug
-        run: gradle assembleDebug --no-daemon --stacktrace
-      - uses: actions/upload-artifact@v4
+      - name: Preparar keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $RUNNER_TEMP/kevanix.jks
+      - name: Compilar APK firmado
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/kevanix.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Subir APK firmado
+        uses: actions/upload-artifact@v4
         with:
-          name: KEVANIX-APK-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: KEVANIX-APK-firmado
+          path: app/build/outputs/apk/release/*.apk
