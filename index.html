@@ -164,7 +164,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin:0
       <div class="sub" id="tbSub"></div>
     </div>
     <div class="spacer"></div>
-    <button class="iconbtn" onclick="logout()" title="Salir">⏻</button>
+    <button class="iconbtn" onclick="logout()" title="Salir" style="width:auto;padding:0 12px;gap:6px;font-size:14px;font-weight:600">🚪 Salir</button>
   </div>
   <div class="content" id="view"></div>
   <div class="bottomnav" id="nav"></div>
@@ -271,7 +271,7 @@ function seed(){
     {id:'col_3',nombre:'Escuela Defensores del Chaco',plan:'Básica',membresiaVence:'2026-07-30',activo:false,color:'#b45309',director:'Lic. Elena Vera',telefono:'595981000002',logo:null,ciudad:'Encarnación',matricula:100000},
   ];
   const usuarios=[
-    {id:'u0',colegioId:null,nombre:'Fredy (Dueño)',usuario:'dueno',pass:'123456',rol:'superadmin'},
+    {id:'u0',colegioId:null,nombre:'KEVANIX',usuario:'kevanix',pass:'123456',rol:'superadmin'},
     {id:'u1',colegioId:cid,nombre:'Lic. Marta Suárez',usuario:'admin',pass:'123456',rol:'admin'},
     {id:'u2',colegioId:cid,nombre:'Prof. Ricardo Gómez',usuario:'docente',pass:'123456',rol:'docente',docenteId:'d1'},
     {id:'u3',colegioId:cid,nombre:'Sofía Martínez',usuario:'alumno',pass:'123456',rol:'alumno',alumnoId:'a1'},
@@ -481,7 +481,8 @@ function go(view){
     notas:vNotas, asistencia:vAsistencia, finanzas:vFinanzas, mensualidades:vMensualidades,
     caja:vCaja, deuda:vDeuda, faltas:vFaltas, comunicados:vComunicados, boletin:vBoletin,
     pagos:vPagos, horario:vHorario, calendario:vCalendario, mas:vMas, config:vConfig,
-    institucion:vInstitucion, examenes:vExamenes, tareas:vTareas, usuarios:vUsuarios
+    institucion:vInstitucion, examenes:vExamenes, tareas:vTareas, usuarios:vUsuarios,
+    superusuarios:vSuperusuarios
   };
   const fn=R[view]||vHome;
   window.scrollTo(0,0);
@@ -691,7 +692,9 @@ function modalColegio(){
     <div class="sectionlabel">Datos de la institución</div>
     <div class="field"><label>Nombre del colegio</label><input id="f_nom" placeholder="Ej: Colegio San José"></div>
     <div class="field"><label>Director/a</label><input id="f_dir" placeholder="Nombre"></div>
-    <div class="field"><label>Teléfono (WhatsApp, con código país)</label><input id="f_tel" placeholder="595981..."></div>
+    <div class="field"><label>Ciudad</label><input id="f_ciu" placeholder="Ej: Asunción"></div>
+    <div class="field"><label>Dirección</label><input id="f_dir2" placeholder="Calle y número"></div>
+    <div class="field"><label>Número de WhatsApp (con código país)</label><input id="f_tel" placeholder="595981..."></div>
     <div class="field"><label>Plan de membresía</label><select id="f_plan">
       <option value="Básica">Básica — ₲ 80.000</option>
       <option value="Media">Media — ₲ 150.000</option>
@@ -723,7 +726,7 @@ async function guardarColegio(){
   }
   try{ await usersCol().doc(uidNuevo).set({usuario,nombre:val('f_dir')||nom,rol:'admin',colegioId:nuevoId}); }
   catch(e){ return toast('No se pudo guardar el perfil del usuario'); }
-  DB.colegios.push({id:nuevoId,nombre:nom,plan,membresiaVence:d.toISOString().slice(0,10),activo:true,color:'#1e3a8a',director:val('f_dir'),telefono:val('f_tel'),logo:null,matricula:150000});
+  DB.colegios.push({id:nuevoId,nombre:nom,plan,membresiaVence:d.toISOString().slice(0,10),activo:true,color:'#1e3a8a',director:val('f_dir'),ciudad:val('f_ciu'),direccion:val('f_dir2'),telefono:val('f_tel'),logo:null,matricula:150000});
   save();closeModal();
   toast('✅ Membresía creada · usuario: '+usuario);
   go('colegios');
@@ -1452,6 +1455,47 @@ function guardarInstitucion(){
   window._logoTmp=null;save();toast('Datos de la institución guardados');go('home');
 }
 
+function vSuperusuarios(el){
+  head('Super usuarios','Panel general');
+  if(session.rol!=='superadmin'){el.innerHTML=empty('Sin acceso');return;}
+  el.innerHTML=`<div class="pagetitle">👑 Super usuarios</div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Cuentas dueñas del sistema (ven todos los colegios y venden membresías).</div>
+    <div id="suList" class="list"><div class="empty">Cargando…</div></div>
+    <button class="fab" onclick="modalSuperUsuario()">+</button>`;
+  usersCol().where('rol','==','superadmin').get().then(s=>{
+    const us=s.docs.map(d=>({uid:d.id,...d.data()}));
+    const cont=document.getElementById('suList');if(!cont)return;
+    cont.innerHTML=us.map(u=>`<div class="li"><div class="av">👑</div>
+      <div class="tx"><b>${u.nombre||u.usuario}</b><small>usuario: ${u.usuario}</small></div>
+      ${u.uid!==session.uid?`<button class="btn sm bad" onclick="borrarSuper('${u.uid}')">✕</button>`:'<span class="pill gray">vos</span>'}</div>`).join('')||empty('Sin super usuarios');
+  }).catch(e=>{const c=document.getElementById('suList');if(c)c.innerHTML=empty('Error al cargar');});
+}
+function modalSuperUsuario(){
+  modal(`<div class="modal-head"><h2>Nuevo super usuario</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nombre</label><input id="su_nom" placeholder="Ej: KEVANIX"></div>
+    <div class="field"><label>Usuario</label><input id="su_user" placeholder="ej: kevanix" autocomplete="off"></div>
+    <div class="field"><label>Contraseña (mínimo 6)</label><input id="su_pass" placeholder="clave" autocomplete="off"></div>
+    <button class="btn" onclick="crearSuperUsuario()">Crear super usuario</button>`);
+}
+async function crearSuperUsuario(){
+  const usuario=val('su_user').toLowerCase(),pass=val('su_pass');
+  if(!usuario||!pass)return toast('Ingresá usuario y contraseña');
+  if(pass.length<6)return toast('La contraseña debe tener al menos 6 caracteres');
+  toast('Creando…');
+  try{
+    const sec=secApp();
+    const cred=await sec.auth().createUserWithEmailAndPassword(emailDe(usuario),pass);
+    await usersCol().doc(cred.user.uid).set({usuario,nombre:val('su_nom')||usuario.toUpperCase(),rol:'superadmin',colegioId:null});
+    try{await sec.auth().signOut();}catch(e){}
+    closeModal();toast('✅ Super usuario creado: '+usuario);go('superusuarios');
+  }catch(e){ if(e&&e.code==='auth/email-already-in-use')return toast('Ese usuario ya existe'); toast('Error: '+((e&&e.message)||'')); }
+}
+function borrarSuper(uidv){
+  if(uidv===session.uid)return toast('No podés eliminar tu propia cuenta');
+  confirmar('¿Quitar este super usuario? Ya no podrá ingresar.',async()=>{
+    try{await usersCol().doc(uidv).delete();toast('Super usuario eliminado');go('superusuarios');}catch(e){toast('No se pudo eliminar');}
+  });
+}
 function modalPassword(){
   modal(`<div class="modal-head"><h2>Cambiar contraseña</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
     <div class="muted" style="font-size:13px;margin-bottom:12px">Elegí una contraseña fuerte: al menos 8 caracteres, con letras y números.</div>
@@ -1480,6 +1524,9 @@ function vConfig(el){
       ${colegio()?`<div class="kv"><span>Institución</span><b>${colName()}</b></div>`:''}
       <div class="kv"><span>Versión</span><b>KEVANIX 1.0</b></div>
     </div>
+    ${session.rol==='superadmin'?`
+      <button class="btn sec" onclick="go('superusuarios')">👑 Super usuarios (dueños del sistema)</button>
+      <div style="height:12px"></div>`:''}
     ${['admin','superadmin'].includes(session.rol)&&colegio()?`
       <button class="btn sec" onclick="go('institucion')">🏫 Datos de la institución (todos los datos y logo)</button>
       <div style="height:8px"></div>
