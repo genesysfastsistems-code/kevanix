@@ -152,10 +152,6 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin:0
     </div>
     <button class="btn" onclick="doLogin()">Ingresar</button>
     <div id="lgErr" class="center" style="color:var(--bad);font-size:13px;margin-top:10px;font-weight:600"></div>
-    <div class="demo-users">
-      <div class="muted center" style="font-size:12px;margin-bottom:10px">Cuentas de demostración (tocá para usar)</div>
-      <div id="demoList"></div>
-    </div>
   </div>
 </div>
 
@@ -662,7 +658,29 @@ function verColegio(id){
       <button class="btn sec" onclick="renovar('${id}')">Renovar 1 año</button>
     </div>
     <div style="height:8px"></div>
-    <button class="btn ghost" onclick="entrarComo('${id}')">Entrar como admin de este colegio</button>`);
+    <button class="btn ghost" onclick="entrarComo('${id}')">Entrar como admin de este colegio</button>
+    <div style="height:8px"></div>
+    <button class="btn bad" onclick="confirmarEliminarColegio('${id}')">🗑️ Eliminar colegio y sus accesos</button>`);
+}
+let _confirmCb=null;
+function confirmar(msg,cb){_confirmCb=cb;
+  modal(`<div class="modal-head"><h2>Confirmar</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <p style="font-size:14px;margin-bottom:14px">${msg}</p>
+    <div class="row"><button class="btn ghost" onclick="closeModal()">Cancelar</button>
+    <button class="btn bad" onclick="var f=_confirmCb;_confirmCb=null;closeModal();if(f)f();">Sí, eliminar</button></div>`);
+}
+function confirmarEliminarColegio(id){const c=colegio(id);confirmar('¿Eliminar <b>'+(c?c.nombre:'')+'</b> con TODOS sus datos y cuentas de acceso? Esta acción no se puede deshacer.',()=>eliminarColegio(id));}
+async function eliminarColegio(id){
+  toast('Eliminando…');
+  try{
+    const us=await usersCol().where('colegioId','==',id).get();
+    for(const d of us.docs){ await usersCol().doc(d.id).delete(); }
+    for(const name of COLLS_DATA){ try{await dataRef(id,name).delete();}catch(e){} }
+    DB.colegios=DB.colegios.filter(c=>c.id!==id);
+    DB.pagosMembresia=(DB.pagosMembresia||[]).filter(p=>p.colegioId!==id);
+    await save();
+    toast('✅ Colegio eliminado');go('colegios');
+  }catch(e){ toast('Error al eliminar: '+((e&&e.message)||'')); }
 }
 function toggleColegio(id){const c=colegio(id);c.activo=!c.activo;save();closeModal();toast(c.activo?'Colegio activado':'Colegio suspendido');go('colegios');}
 function renovar(id){const c=colegio(id);const d=new Date(c.membresiaVence);d.setFullYear(d.getFullYear()+1);c.membresiaVence=d.toISOString().slice(0,10);c.activo=true;save();closeModal();toast('Membresía renovada +1 año');go(state.view);}
@@ -1434,6 +1452,25 @@ function guardarInstitucion(){
   window._logoTmp=null;save();toast('Datos de la institución guardados');go('home');
 }
 
+function modalPassword(){
+  modal(`<div class="modal-head"><h2>Cambiar contraseña</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="font-size:13px;margin-bottom:12px">Elegí una contraseña fuerte: al menos 8 caracteres, con letras y números.</div>
+    <div class="field"><label>Nueva contraseña</label><input id="pw_new" type="password" placeholder="Mínimo 6"></div>
+    <div class="field"><label>Repetir contraseña</label><input id="pw_new2" type="password"></div>
+    <button class="btn" onclick="cambiarPassword()">Cambiar contraseña</button>`);
+}
+async function cambiarPassword(){
+  const a=val('pw_new'),b=val('pw_new2');
+  if(a.length<6)return toast('Mínimo 6 caracteres');
+  if(a!==b)return toast('Las contraseñas no coinciden');
+  try{
+    await firebase.auth().currentUser.updatePassword(a);
+    closeModal();toast('✅ Contraseña actualizada');
+  }catch(e){
+    if(e&&e.code==='auth/requires-recent-login')return toast('Por seguridad, cerrá sesión, volvé a entrar y probá de nuevo.');
+    toast('No se pudo cambiar: '+((e&&e.message)||''));
+  }
+}
 function vConfig(el){
   head('Ajustes');
   el.innerHTML=`<div class="pagetitle">⚙️ Ajustes</div>
@@ -1448,6 +1485,8 @@ function vConfig(el){
       <div style="height:8px"></div>
       <button class="btn sec" onclick="go('usuarios')">👥 Usuarios y accesos (docentes, familias, alumnos)</button>
       <div style="height:12px"></div>`:''}
+    <button class="btn sec" onclick="modalPassword()">🔑 Cambiar mi contraseña</button>
+    <div style="height:12px"></div>
     <button class="btn bad" onclick="logout()">Cerrar sesión</button>`;
 }
 
@@ -1749,7 +1788,7 @@ function modal(html){closeModal();const bg=document.createElement('div');bg.clas
 function closeModal(){const m=document.getElementById('modalBg');if(m)m.remove();}
 
 /* ---------------- INIT ---------------- */
-renderDemo();
+
 (function(){const l=document.getElementById('loginLogo');if(l){l.style.background='transparent';l.style.boxShadow='none';l.innerHTML=`<img src="${BRAND_LOGO}" style="width:100%;height:100%;object-fit:contain">`;}})();
 document.getElementById('lgPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 // Conectar a la nube (Firebase) y luego mostrar el login
