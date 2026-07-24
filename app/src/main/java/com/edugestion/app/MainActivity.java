@@ -34,9 +34,15 @@ import java.io.OutputStream;
 public class MainActivity extends AppCompatActivity {
 
     private WebView web;
-    // Carga la versión EN LÍNEA (GitHub Pages). Así el APK se actualiza solo con la web.
-    private static final String HOME = "https://genesysfastsistems-code.github.io/kevanix/";
-    private static final String APP_HOST = "genesysfastsistems-code.github.io";
+    // Carga la versión EN LÍNEA (dominio propio). Así el APK se actualiza solo con la web.
+    private static final String HOME = "https://www.kevanix.com/";
+
+    // Hosts que se abren DENTRO de la app (dominio propio + respaldo al dominio viejo de GitHub)
+    private static boolean esAppHost(String host) {
+        return host.equals("www.kevanix.com")
+            || host.equals("kevanix.com")
+            || host.equals("genesysfastsistems-code.github.io");
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
                     || scheme.equals("sms") || scheme.equals("intent")) { openExternal(url); return true; }
                 if (host.contains("wa.me")) { openExternal(url); return true; }
                 // La propia app y la infraestructura de Firebase/Google: cargar dentro del WebView
-                if (host.equals(APP_HOST) || host.isEmpty()
+                if (esAppHost(host) || host.isEmpty()
                     || host.endsWith("gstatic.com") || host.endsWith("googleapis.com")
                     || host.endsWith("google.com") || host.endsWith("firebaseio.com")
                     || host.endsWith("firebaseapp.com") || host.endsWith("cloudfunctions.net")) {
