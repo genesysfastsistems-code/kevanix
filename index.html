@@ -125,6 +125,16 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin:0
 .seg{display:flex;background:#eef2ff;border-radius:12px;padding:4px;margin-bottom:14px}
 .seg button{flex:1;padding:8px;border-radius:9px;font-size:13px;font-weight:600;color:var(--brand)}
 .seg button.active{background:#fff;color:var(--brand2);box-shadow:var(--shadow)}
+.badge{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:1.5px solid #0a0e2e}
+.notif{padding:11px 2px;border-bottom:1px solid var(--line)}
+.notif:last-child{border:none}
+.notif .nt{font-weight:700;font-size:14px}
+.notif .nd{font-size:13px;color:#334155;margin-top:2px}
+.notif .ntime{font-size:11px;color:var(--muted);margin-top:3px}
+.avlabel{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:4px}
+.avlabel.inst{background:#dbeafe;color:#1e40af}
+.avlabel.doc{background:#dcfce7;color:#166534}
+.filechip{display:inline-flex;align-items:center;gap:5px;background:#eef2ff;color:var(--brand);font-size:12px;font-weight:600;padding:5px 10px;border-radius:9px;margin:4px 6px 0 0;text-decoration:none}
 </style>
 </head>
 <body>
@@ -164,6 +174,7 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin:0
       <div class="sub" id="tbSub"></div>
     </div>
     <div class="spacer"></div>
+    <button id="tbBell" class="iconbtn" onclick="openNotifs()" title="Notificaciones" style="position:relative;margin-right:8px;display:none">🔔<span id="tbBadge" class="badge" style="display:none"></span></button>
     <button class="iconbtn" onclick="logout()" title="Salir" style="width:auto;padding:0 12px;gap:6px;font-size:14px;font-weight:600">🚪 Salir</button>
   </div>
   <div class="content" id="view"></div>
@@ -257,8 +268,9 @@ function seed(){
     {id:'c3',colegioId:cid,fecha:hoy(),tipo:'ingreso',concepto:'Cuota Valentina López',monto:350000},
   ];
   const comunicados=[
-    {id:'co1',colegioId:cid,titulo:'Reunión de padres',cuerpo:'Se convoca a reunión de padres el viernes 25/07 a las 18:00 hs en el SUM.',fecha:hoy(),autor:'Dirección'},
-    {id:'co2',colegioId:cid,titulo:'Acto 9 de Julio',cuerpo:'Recordamos el acto por el Día de la Independencia. Los alumnos deben venir con uniforme de gala.',fecha:hoy(),autor:'Dirección'},
+    {id:'co1',colegioId:cid,titulo:'Reunión de padres',cuerpo:'Se convoca a reunión de padres el viernes 25/07 a las 18:00 hs en el SUM.',fecha:hoy(),autor:'Dirección',tipo:'institucion'},
+    {id:'co2',colegioId:cid,titulo:'Acto 9 de Julio',cuerpo:'Recordamos el acto por el Día de la Independencia. Los alumnos deben venir con uniforme de gala.',fecha:hoy(),autor:'Dirección',tipo:'institucion'},
+    {id:'co3',colegioId:cid,titulo:'Traer calculadora el lunes',cuerpo:'Para la clase de Matemática del lunes, traer calculadora científica.',fecha:hoy(),autor:'Prof. Ricardo Gómez',tipo:'docente',docenteId:'d1'},
   ];
   const eventos=[
     {id:'ev1',colegioId:cid,titulo:'Examen de Matemática 6to grado',fecha:'2026-07-28',tipo:'examen'},
@@ -461,7 +473,7 @@ const NAV={
   admin:[['home','Inicio','🏠'],['academico','Académico','📚'],['finanzas','Finanzas','💰'],['comunicados','Avisos','📢'],['mas','Más','⋯']],
   docente:[['home','Inicio','🏠'],['notas','Notas','📝'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['mas','Más','⋯']],
   familia:[['home','Inicio','🏠'],['boletin','Boletín','📄'],['tareas','Tareas','📋'],['pagos','Pagos','💰'],['mas','Más','⋯']],
-  alumno:[['home','Inicio','🏠'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['boletin','Boletín','📄'],['mas','Más','⋯']],
+  alumno:[['home','Inicio','🏠'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['comunicados','Avisos','📢'],['mas','Más','⋯']],
 };
 function buildNav(){
   const items=NAV[session.rol]||NAV.admin;
@@ -487,6 +499,57 @@ function go(view){
   const fn=R[view]||vHome;
   window.scrollTo(0,0);
   fn(el);
+  try{refreshBell();}catch(e){}
+}
+
+/* ============================================================
+   NOTIFICACIONES DENTRO DE LA APP (campana + globito)
+   ============================================================ */
+function notifList(){
+  const out=[];
+  if(!session)return out;
+  if(session.rol==='superadmin'){
+    (DB.colegios||[]).forEach(c=>{
+      if(!c.membresiaVence)return;
+      const dias=Math.ceil((new Date(c.membresiaVence)-new Date())/86400000);
+      if(dias<=20){
+        out.push({t:'⏰ Membresía por vencer',
+          d:`${c.nombre} · plan ${c.plan} · ${dias<0?'venció hace '+(-dias)+' día(s)':'vence en '+dias+' día(s)'}`,
+          ts:c.membresiaVence, cid:c.id, kind:'venc'});
+      }
+    });
+  }
+  if(session.rol==='alumno'||session.rol==='familia'){
+    const al=alumno(session.alumnoId); const g=al?al.grado:null;
+    q('comunicados').forEach(c=>{
+      out.push({t:(c.tipo==='docente'?'👩‍🏫 Aviso del Docente':'🏫 Aviso de la Institución'),
+        d:c.titulo, ts:c.fecha, kind:'aviso', id:c.id});
+    });
+    q('tareas').filter(t=>t.grado===g).forEach(t=>{
+      out.push({t:'📋 Nueva tarea', d:(t.titulo||'')+' · entrega '+fmtFecha(t.entrega), ts:t.fecha||'', kind:'tarea', id:t.id});
+    });
+  }
+  return out.sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+}
+function notifKey(n){return n.kind+'|'+(n.id||n.cid||'')+'|'+n.d;}
+function seenKeyName(){return 'kx_seen_'+((session&&(session.uid||session.usuario))||'x');}
+function seenSet(){try{return new Set(JSON.parse(localStorage.getItem(seenKeyName())||'[]'));}catch(e){return new Set();}}
+function saveSeen(s){try{localStorage.setItem(seenKeyName(),JSON.stringify([...s].slice(-200)));}catch(e){}}
+function refreshBell(){
+  const bell=document.getElementById('tbBell'),badge=document.getElementById('tbBadge');
+  if(!bell||!session)return;
+  if(!['superadmin','alumno','familia'].includes(session.rol)){bell.style.display='none';return;}
+  bell.style.display='';
+  const list=notifList(),seen=seenSet();
+  const n=list.filter(x=>!seen.has(notifKey(x))).length;
+  if(badge){badge.textContent=n>9?'9+':String(n);badge.style.display=n?'flex':'none';}
+}
+function openNotifs(){
+  const list=notifList();
+  modal(`<div class="modal-head"><h2>🔔 Notificaciones</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div style="max-height:60vh;overflow:auto">${list.length?list.map(n=>`<div class="notif" ${n.cid?`onclick="closeModal();verColegio('${n.cid}')" style="cursor:pointer"`:''}>
+      <div class="nt">${n.t}</div><div class="nd">${n.d}</div><div class="ntime">${fmtFecha(n.ts)}</div></div>`).join(''):empty('Sin notificaciones','Estás al día 🎉')}</div>`);
+  const s=seenSet();list.forEach(n=>s.add(notifKey(n)));saveSeen(s);refreshBell();
 }
 
 /* ============================================================
@@ -523,6 +586,8 @@ function vHomeSuper(el){
       <div class="stat"><span class="ico">💵</span><div class="n">${money(mrr)}</div><div class="l">Ingreso mensual (MRR)</div></div>
       <div class="stat"><span class="ico">⏰</span><div class="n">${cs.filter(c=>venceProximo(c)).length}</div><div class="l">Por vencer</div></div>
     </div>
+    ${(()=>{const pv=cs.filter(c=>venceProximo(c)).sort((a,b)=>String(a.membresiaVence).localeCompare(String(b.membresiaVence)));
+      return pv.length?`<div class="sectionlabel">⏰ Membresías por vencer</div><div class="list">${pv.map(c=>venceLi(c)).join('')}</div>`:'';})()}
     <div class="sectionlabel">Colegios recientes</div>
     <div class="list">${cs.map(c=>colegioLi(c)).join('')}</div>
     <div style="height:12px"></div>
@@ -531,7 +596,14 @@ function vHomeSuper(el){
     <button class="btn sec" onclick="go('membresias')">💳 Ver membresías y planes</button>
   `;
 }
-function venceProximo(c){const d=(new Date(c.membresiaVence)-new Date())/86400000;return d<20;}
+function venceProximo(c){if(!c.membresiaVence)return false;const d=(new Date(c.membresiaVence)-new Date())/86400000;return d<20;}
+function venceLi(c){const dias=Math.ceil((new Date(c.membresiaVence)-new Date())/86400000);
+  return `<div class="li" onclick="verColegio('${c.id}')"><div class="av" style="background:#fef3c7;color:#92400e">⏰</div>
+    <div class="tx"><b>${c.nombre}</b><small>${dias<0?'Vencida hace '+(-dias)+' día(s)':'Vence en '+dias+' día(s)'} · ${fmtFecha(c.membresiaVence)}</small></div>
+    <button class="btn sm ok" onclick="event.stopPropagation();waColegioVence('${c.id}')">💬</button></div>`;}
+function waColegioVence(id){const c=colegio(id);if(!c)return;const dias=Math.ceil((new Date(c.membresiaVence)-new Date())/86400000);
+  const msg=`Hola${c.director?' '+c.director:''}, le escribimos de KEVANIX. La membresía del plan ${c.plan} de ${c.nombre} ${dias<0?'venció el':'vence el'} ${fmtFecha(c.membresiaVence)}. Para renovar y mantener el sistema activo, por favor responda este mensaje. ¡Gracias!`;
+  waTel(c.telefono,msg);}
 function colegioLi(c){
   return `<div class="li" onclick="verColegio('${c.id}')">
     <div class="av" style="background:${c.color}22;color:${c.color}">${c.nombre[0]}</div>
@@ -553,21 +625,27 @@ function vHomeAdmin(el){
       <div class="stat"><span class="ico">📕</span><div class="n">${nMat}</div><div class="l">Materias</div></div>
       <div class="stat"><span class="ico">🔴</span><div class="n">${money(deuda)}</div><div class="l">Deuda por cobrar</div></div>
     </div>
-    <div class="sectionlabel">Accesos rápidos</div>
+    <div class="sectionlabel">📚 Académico</div>
     <div class="menu-grid">
       ${tile('alumnos','🎒','Alumnos','Gestión de estudiantes')}
       ${tile('docentes','👩‍🏫','Docentes','Personal docente')}
       ${tile('materias','📚','Materias','Asignaturas')}
       ${tile('notas','📝','Calificaciones','Boletines')}
       ${tile('asistencia','✓','Asistencia','Faltas y tardanzas')}
+    </div>
+    <div class="sectionlabel">💰 Finanzas</div>
+    <div class="menu-grid">
       ${tile('mensualidades','💰','Mensualidades','Cobros')}
       ${tile('deuda','🔴','Deudas','Morosidad')}
       ${tile('caja','🧾','Caja','Ingresos/egresos')}
+    </div>
+    <div class="sectionlabel">📋 Gestión</div>
+    <div class="menu-grid">
       ${tile('usuarios','👥','Usuarios','Docentes y familias')}
       ${tile('tareas','📋','Tareas','Deberes')}
       ${tile('examenes','📝','Exámenes','Horario')}
       ${tile('horario','🕐','Horario','Clases')}
-      ${tile('comunicados','📢','Comunicados','Avisos')}
+      ${tile('comunicados','📢','Avisos','Institución/Docente')}
       ${tile('calendario','📅','Calendario','Eventos')}
     </div>`;
 }
@@ -593,6 +671,7 @@ function vHomeDocente(el){
       ${tile('tareas','📋','Tareas','Cargar deberes')}
       ${tile('examenes','📝','Exámenes','Programar')}
       ${tile('horario','🕐','Horario','Clases')}
+      ${tile('calendario','📅','Calendario','Eventos')}
     </div>`;
 }
 
@@ -623,12 +702,13 @@ function vHomeFamilia(el){
     </div>
     <div class="sectionlabel">Accesos</div>
     <div class="menu-grid">
-      ${tile('boletin','📄','Boletín','Calificaciones')}
+      ${session.rol==='familia'?tile('boletin','📄','Boletín','Calificaciones'):''}
       ${tile('tareas','📋','Tareas','Deberes')}
       ${tile('examenes','📝','Exámenes','Horario')}
       ${tile('horario','🕐','Horario','Clases')}
-      ${tile('pagos','💰','Pagos','Cuotas')}
-      ${tile('comunicados','📢','Comunicados','Avisos')}
+      ${session.rol==='familia'?tile('pagos','💰','Pagos','Cuotas'):''}
+      ${tile('comunicados','📢','Avisos','Institución/Docente')}
+      ${tile('calendario','📅','Calendario','Eventos')}
     </div>`;
 }
 
@@ -654,6 +734,11 @@ function verColegio(id){
       ${pagos.length?pagos.map(p=>`<div class="kv"><span>${fmtFecha(p.fecha)} · ${p.plan} (${p.modalidad})</span><b>${money(p.monto)} <button class="btn sm sec" style="margin-left:6px" onclick="reciboMembresiaById('${id}','${p.id}')">🧾</button></b></div>`).join(''):'<div class="muted" style="font-size:13px;padding:4px 0">Sin pagos registrados</div>'}
       ${pagos.length?`<div class="kv"><span><b>Total cobrado</b></span><b style="color:var(--ok)">${money(totalPag)}</b></div>`:''}`;})()}
     <div style="height:14px"></div>
+    <div class="row">
+      <button class="btn sec" onclick="modalEditarColegio('${id}')">✏️ Editar datos</button>
+      <button class="btn ok" onclick="waColegioVence('${id}')">💬 WhatsApp</button>
+    </div>
+    <div style="height:8px"></div>
     <div class="row">
       <button class="btn ${c.activo?'warn':'ok'}" onclick="toggleColegio('${id}')">${c.activo?'Suspender':'Activar'}</button>
       <button class="btn sec" onclick="renovar('${id}')">Renovar 1 año</button>
@@ -687,6 +772,29 @@ function toggleColegio(id){const c=colegio(id);c.activo=!c.activo;save();closeMo
 function renovar(id){const c=colegio(id);const d=new Date(c.membresiaVence);d.setFullYear(d.getFullYear()+1);c.membresiaVence=d.toISOString().slice(0,10);c.activo=true;save();closeModal();toast('Membresía renovada +1 año');go(state.view);}
 function entrarComo(id){state.colegioActivo=id;listenColegio(id);const fake={...session,rol:'admin',_super:true};session=fake;buildNav();toast('Viendo como administrador');go('home');}
 const PLAN_PRECIO={'Básica':80000,'Media':150000,'Premium':300000};
+function modalEditarColegio(id){
+  const c=colegio(id);if(!c)return;
+  modal(`<div class="modal-head"><h2>Editar cliente</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nombre del colegio</label><input id="e_nom" value="${(c.nombre||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>Director/a</label><input id="e_dir" value="${(c.director||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>Ciudad</label><input id="e_ciu" value="${(c.ciudad||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>Dirección</label><input id="e_dir2" value="${(c.direccion||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>WhatsApp (con código país)</label><input id="e_tel" value="${(c.telefono||'').replace(/"/g,'&quot;')}" placeholder="595981..."></div>
+    <div class="field"><label>Plan</label><select id="e_plan">
+      ${['Básica','Media','Premium'].map(p=>`<option ${c.plan===p?'selected':''}>${p}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Fecha de vencimiento de la membresía</label><input id="e_venc" type="date" value="${c.membresiaVence||''}"></div>
+    <div class="field"><label>Monto de matrícula (₲)</label><input id="e_mat" type="number" value="${c.matricula||''}"></div>
+    <button class="btn" onclick="guardarEditarColegio('${id}')">Guardar cambios</button>`);
+}
+function guardarEditarColegio(id){
+  const c=colegio(id);if(!c)return;
+  const nom=val('e_nom');if(!nom)return toast('Ingresá el nombre');
+  c.nombre=nom;c.director=val('e_dir');c.ciudad=val('e_ciu');c.direccion=val('e_dir2');c.telefono=val('e_tel');c.plan=val('e_plan');
+  if(val('e_venc'))c.membresiaVence=val('e_venc');
+  const mm=parseFloat(val('e_mat'));if(!isNaN(mm))c.matricula=mm;
+  save();closeModal();toast('✅ Datos del cliente actualizados');go(state.view);
+}
 function modalColegio(){
   modal(`<div class="modal-head"><h2>Nueva membresía</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
     <div class="sectionlabel">Datos de la institución</div>
@@ -755,6 +863,8 @@ function vMembresias(el){
         <option value="mensual">Mensual (1 mes)</option>
         <option value="anual">Anual — 2 meses gratis 🎁</option>
       </select></div>
+      <div class="field"><label>Fecha de vencimiento (opcional)</label><input id="v_venc" type="date">
+        <div class="muted" style="font-size:12px;margin-top:4px">Dejalo vacío para calcular automático (mensual +1 mes, anual +1 año).</div></div>
       <div id="v_total" style="background:#eef2ff;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:14px"></div>
       <button class="btn ok" onclick="venderMembresia()">Registrar pago y activar</button>
     </div>`;
@@ -780,7 +890,8 @@ function venderMembresia(){
   let monto;
   if(mod==='anual'){monto=precio*10;base.setFullYear(base.getFullYear()+1);}
   else{monto=precio;base.setMonth(base.getMonth()+1);}
-  c.plan=plan;c.activo=true;c.membresiaVence=base.toISOString().slice(0,10);
+  const vencManual=val('v_venc');
+  c.plan=plan;c.activo=true;c.membresiaVence=vencManual?vencManual:base.toISOString().slice(0,10);
   DB.pagosMembresia=DB.pagosMembresia||[];
   const pago={id:uid('pm'),colegioId:c.id,fecha:hoy(),plan,modalidad:mod,monto};
   DB.pagosMembresia.push(pago);
@@ -889,39 +1000,49 @@ function vDocentes(el){
   const ds=q('docentes');
   el.innerHTML=`<div class="pagetitle">Docentes (${ds.length})</div>
     <div class="list">${ds.map(d=>{const mm=DB.materias.filter(m=>m.docenteId===d.id).length;
-      return `<div class="li"><div class="av">👩‍🏫</div><div class="tx"><b>${d.nombre}</b><small>${d.especialidad} · ${mm} materias</small></div>
-      <button class="btn sm sec" onclick="waTel('${d.telefono}','Hola ${d.nombre}')">💬</button></div>`;}).join('')||empty('Sin docentes')}</div>
+      return `<div class="li" onclick="modalDocente('${d.id}')"><div class="av">👩‍🏫</div><div class="tx"><b>${d.nombre}</b><small>${d.especialidad||''} · ${mm} materias</small></div>
+      <button class="btn sm sec" onclick="event.stopPropagation();waTel('${d.telefono}','Hola ${d.nombre}')">💬</button></div>`;}).join('')||empty('Sin docentes')}</div>
     <button class="fab" onclick="modalDocente()">+</button>`;
 }
-function modalDocente(){
-  modal(`<div class="modal-head"><h2>Nuevo docente</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
-    <div class="field"><label>Nombre</label><input id="d_nom" placeholder="Prof. ..."></div>
-    <div class="field"><label>Especialidad</label><input id="d_esp"></div>
-    <div class="field"><label>Teléfono</label><input id="d_tel" placeholder="549..."></div>
-    <button class="btn" onclick="guardarDocente()">Guardar</button>`);
+function modalDocente(id){
+  const d=id?docente(id):{};
+  modal(`<div class="modal-head"><h2>${id?'Editar docente':'Nuevo docente'}</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nombre</label><input id="d_nom" value="${(d.nombre||'').replace(/"/g,'&quot;')}" placeholder="Prof. ..."></div>
+    <div class="field"><label>Especialidad</label><input id="d_esp" value="${(d.especialidad||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>Teléfono</label><input id="d_tel" value="${(d.telefono||'').replace(/"/g,'&quot;')}" placeholder="595..."></div>
+    <button class="btn" onclick="guardarDocente('${id||''}')">Guardar</button>
+    ${id?`<div style="height:8px"></div><button class="btn bad" onclick="borrarDocente('${id}')">🗑️ Eliminar docente</button>`:''}`);
 }
-function guardarDocente(){const n=val('d_nom');if(!n)return toast('Ingresá el nombre');
-  DB.docentes.push({id:uid('d'),colegioId:cid(),nombre:n,especialidad:val('d_esp'),telefono:val('d_tel')});
-  save();closeModal();toast('Docente agregado');go('docentes');}
+function guardarDocente(id){const n=val('d_nom');if(!n)return toast('Ingresá el nombre');
+  const datos={nombre:n,especialidad:val('d_esp'),telefono:val('d_tel')};
+  if(id){Object.assign(docente(id),datos);}
+  else DB.docentes.push({id:uid('d'),colegioId:cid(),...datos});
+  save();closeModal();toast(id?'Docente actualizado':'Docente agregado');go('docentes');}
+function borrarDocente(id){confirmar('¿Eliminar este docente?',()=>{DB.docentes=DB.docentes.filter(d=>d.id!==id);save();closeModal();toast('Docente eliminado');go('docentes');});}
 
 function vMaterias(el){
   head('Materias');
   const ms=q('materias');
   el.innerHTML=`<div class="pagetitle">Materias (${ms.length})</div>
     <div class="list">${ms.map(m=>{const d=docente(m.docenteId);
-      return `<div class="li"><div class="av">📕</div><div class="tx"><b>${m.nombre}</b><small>${m.grado} · ${d?d.nombre:'Sin docente'}</small></div></div>`;}).join('')||empty('Sin materias')}</div>
+      return `<div class="li" onclick="modalMateria('${m.id}')"><div class="av">📕</div><div class="tx"><b>${m.nombre}</b><small>${m.grado} · ${d?d.nombre:'Sin docente'}</small></div><div class="rt">✏️</div></div>`;}).join('')||empty('Sin materias')}</div>
     <button class="fab" onclick="modalMateria()">+</button>`;
 }
-function modalMateria(){
-  modal(`<div class="modal-head"><h2>Nueva materia</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
-    <div class="field"><label>Nombre</label><input id="m_nom"></div>
-    <div class="field"><label>Grado</label><input id="m_gr" placeholder="Ej: 6to grado"></div>
-    <div class="field"><label>Docente</label><select id="m_doc">${q('docentes').map(d=>`<option value="${d.id}">${d.nombre}</option>`).join('')}</select></div>
-    <button class="btn" onclick="guardarMateria()">Guardar</button>`);
+function modalMateria(id){
+  const m=id?materia(id):{};
+  modal(`<div class="modal-head"><h2>${id?'Editar materia':'Nueva materia'}</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nombre</label><input id="m_nom" value="${(m.nombre||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>Grado</label><input id="m_gr" value="${(m.grado||'').replace(/"/g,'&quot;')}" placeholder="Ej: 6to grado"></div>
+    <div class="field"><label>Docente</label><select id="m_doc">${q('docentes').map(d=>`<option value="${d.id}" ${m.docenteId===d.id?'selected':''}>${d.nombre}</option>`).join('')}</select></div>
+    <button class="btn" onclick="guardarMateria('${id||''}')">Guardar</button>
+    ${id?`<div style="height:8px"></div><button class="btn bad" onclick="borrarMateria('${id}')">🗑️ Eliminar materia</button>`:''}`);
 }
-function guardarMateria(){const n=val('m_nom');if(!n)return toast('Ingresá el nombre');
-  DB.materias.push({id:uid('m'),colegioId:cid(),nombre:n,grado:val('m_gr'),docenteId:val('m_doc')});
-  save();closeModal();toast('Materia agregada');go('materias');}
+function guardarMateria(id){const n=val('m_nom');if(!n)return toast('Ingresá el nombre');
+  const datos={nombre:n,grado:val('m_gr'),docenteId:val('m_doc')};
+  if(id){Object.assign(materia(id),datos);}
+  else DB.materias.push({id:uid('m'),colegioId:cid(),...datos});
+  save();closeModal();toast(id?'Materia actualizada':'Materia agregada');go('materias');}
+function borrarMateria(id){confirmar('¿Eliminar esta materia?',()=>{DB.materias=DB.materias.filter(m=>m.id!==id);save();closeModal();toast('Materia eliminada');go('materias');});}
 
 /* -------- NOTAS -------- */
 function vNotas(el){
@@ -1129,32 +1250,55 @@ function vFaltas(el){
 }
 
 /* -------- COMUNICADOS -------- */
+function avisoTipoDe(){return session.rol==='docente'?'docente':'institucion';}
+function puedeCrearAviso(){return ['admin','superadmin','docente'].includes(session.rol);}
+function puedeEditarAviso(c){
+  const tipo=c.tipo||'institucion';
+  if(tipo==='institucion')return ['admin','superadmin'].includes(session.rol);
+  return session.rol==='docente'&&c.docenteId===session.docenteId;
+}
 function vComunicados(el){
-  head('Comunicados');
+  head('Avisos');
   const cs=q('comunicados').slice().reverse();
-  const puede=['admin','superadmin','docente'].includes(session.rol);
-  el.innerHTML=`<div class="pagetitle">📢 Comunicados</div>
-    ${cs.map(c=>`<div class="card"><div style="display:flex;justify-content:space-between"><h3 style="margin:0">${c.titulo}</h3><span class="pill info">${fmtFecha(c.fecha)}</span></div>
-      <p style="margin:8px 0 0;font-size:14px;color:#334155">${c.cuerpo}</p>
-      <div class="muted" style="font-size:12px;margin-top:8px">— ${c.autor}</div>
-      ${puede?`<div style="margin-top:10px"><button class="btn sm ok" onclick="waComunicado('${c.id}')">💬 Difundir por WhatsApp</button></div>`:''}
-    </div>`).join('')||empty('Sin comunicados')}
-    ${puede?`<button class="fab" onclick="modalComunicado()">+</button>`:''}`;
+  el.innerHTML=`<div class="pagetitle">📢 Avisos y comunicados</div>
+    ${cs.map(c=>{const tipo=c.tipo||'institucion';const esInst=tipo==='institucion';
+      return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:start">
+        <div><span class="avlabel ${esInst?'inst':'doc'}">${esInst?'🏫 Aviso Institución':'👩‍🏫 Aviso Docente'}</span><h3 style="margin:2px 0 0">${c.titulo}</h3></div>
+        <span class="pill info">${fmtFecha(c.fecha)}</span></div>
+      <p style="margin:8px 0 0;font-size:14px;color:#334155">${c.cuerpo||''}</p>
+      <div class="muted" style="font-size:12px;margin-top:8px">— ${c.autor||''}</div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+        ${['admin','superadmin','docente'].includes(session.rol)?`<button class="btn sm ok" onclick="waComunicado('${c.id}')">💬 Difundir</button>`:''}
+        ${puedeEditarAviso(c)?`<button class="btn sm sec" onclick="modalComunicado('${c.id}')">✏️ Editar</button>
+        <button class="btn sm bad" onclick="borrarComunicado('${c.id}')">🗑️</button>`:''}
+      </div>
+    </div>`;}).join('')||empty('Sin avisos')}
+    ${puedeCrearAviso()?`<button class="fab" onclick="modalComunicado()">+</button>`:''}`;
 }
-function modalComunicado(){
-  modal(`<div class="modal-head"><h2>Nuevo comunicado</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
-    <div class="field"><label>Título</label><input id="co_tit"></div>
-    <div class="field"><label>Mensaje</label><textarea id="co_cor" rows="4"></textarea></div>
-    <button class="btn" onclick="guardarComunicado()">Publicar</button>`);
+function modalComunicado(id){
+  const c=id?DB.comunicados.find(x=>x.id===id):null;
+  const tipo=c?(c.tipo||'institucion'):avisoTipoDe();
+  const lbl=tipo==='institucion'?'Aviso Institución':'Aviso Docente';
+  modal(`<div class="modal-head"><h2>${id?'Editar aviso':'Nuevo '+lbl}</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="avlabel ${tipo==='institucion'?'inst':'doc'}" style="margin-bottom:10px">${tipo==='institucion'?'🏫 Aviso Institución':'👩‍🏫 Aviso Docente'}</div>
+    <div class="field"><label>Título</label><input id="co_tit" value="${c?(c.titulo||'').replace(/"/g,'&quot;'):''}"></div>
+    <div class="field"><label>Mensaje</label><textarea id="co_cor" rows="4">${c?(c.cuerpo||''):''}</textarea></div>
+    <button class="btn" onclick="guardarComunicado('${id||''}')">${id?'Guardar':'Publicar'}</button>`);
 }
-function guardarComunicado(){const t=val('co_tit');if(!t)return toast('Ingresá un título');
-  DB.comunicados.push({id:uid('co'),colegioId:cid(),titulo:t,cuerpo:val('co_cor'),fecha:hoy(),autor:session.nombre});
-  save();closeModal();toast('Comunicado publicado');go('comunicados');}
+function guardarComunicado(id){const t=val('co_tit');if(!t)return toast('Ingresá un título');
+  if(id){const c=DB.comunicados.find(x=>x.id===id);if(!c||!puedeEditarAviso(c))return toast('No podés editar este aviso');
+    c.titulo=t;c.cuerpo=val('co_cor');}
+  else{const tipo=avisoTipoDe();
+    DB.comunicados.push({id:uid('co'),colegioId:cid(),titulo:t,cuerpo:val('co_cor'),fecha:hoy(),autor:session.nombre,tipo,docenteId:tipo==='docente'?session.docenteId:null});}
+  save();closeModal();toast(id?'Aviso actualizado':'Aviso publicado');go('comunicados');}
+function borrarComunicado(id){const c=DB.comunicados.find(x=>x.id===id);if(!c||!puedeEditarAviso(c))return toast('No podés eliminar este aviso');
+  confirmar('¿Eliminar este aviso?',()=>{DB.comunicados=DB.comunicados.filter(x=>x.id!==id);save();closeModal();toast('Aviso eliminado');go('comunicados');});}
 
 /* -------- BOLETÍN (familia/alumno) -------- */
 function docenteDeMateria(mid){const m=materia(mid);const d=m?docente(m.docenteId):null;return d?d.nombre:'—';}
 function vBoletin(el){
   head('Boletín');
+  if(session.rol==='alumno'){el.innerHTML=`<div class="pagetitle">Boletín</div>${empty('El boletín está disponible en el perfil de la familia','Pedile a tu familia que lo consulte')}`;return;}
   const al=alumno(session.alumnoId);
   const notas=DB.notas.filter(n=>n.alumnoId===al.id);
   const prom=promedio(notas.map(n=>n.nota));
@@ -1237,7 +1381,7 @@ function vCalendario(el){
     <div class="list">${evs.map(e=>`<div class="li"><div class="av" style="background:${e.tipo==='examen'?'#fee2e2':'#dbeafe'};color:${e.tipo==='examen'?'#991b1b':'#1e40af'}">${e.tipo==='examen'?'📝':'📌'}</div>
       <div class="tx"><b>${e.titulo}</b><small>${fmtFecha(e.fecha)}</small></div>
       <div class="rt"><span class="pill ${e.tipo==='examen'?'bad':'info'}">${e.tipo}</span></div></div>`).join('')||empty('Sin eventos')}</div>
-    ${['admin','superadmin'].includes(session.rol)?`<button class="fab" onclick="modalEvento()">+</button>`:''}`;
+    ${['admin','superadmin','docente'].includes(session.rol)?`<button class="fab" onclick="modalEvento()">+</button>`:''}`;
 }
 function modalEvento(){
   modal(`<div class="modal-head"><h2>Nuevo evento</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
@@ -1268,9 +1412,9 @@ function vMas(el){
   };
   const sets={
     admin:['usuarios','institucion','examenes','horario','tareas','calendario','faltas','config'],
-    docente:['tareas','examenes','horario','asistencia','comunicados'],
-    alumno:['examenes','horario','boletin','comunicados'],
-    familia:['examenes','horario','tareas','comunicados','config'],
+    docente:['tareas','examenes','horario','asistencia','comunicados','calendario'],
+    alumno:['examenes','horario','comunicados','calendario'],
+    familia:['examenes','horario','tareas','comunicados','calendario','config'],
   };
   const items=(sets[session.rol]||sets.admin).map(k=>T[k]).join('');
   el.innerHTML=`<div class="pagetitle">Más</div><div class="menu-grid">${items}</div>
@@ -1380,44 +1524,93 @@ function borrarExamen(id){DB.examenes=DB.examenes.filter(e=>e.id!==id);save();go
 /* ============================================================
    TAREAS (deberes) — el docente carga, el alumno ve
    ============================================================ */
+function archLinks(arr){return (arr||[]).map(a=>`<a class="filechip" href="${a.data||a.url}" target="_blank" ${a.data?`download="${(a.nombre||'archivo').replace(/"/g,'')}"`:''}>📎 ${a.nombre||'Archivo'}</a>`).join('');}
+function yaEntrego(t){return (t.entregas||[]).some(e=>e.alumnoId===session.alumnoId);}
 function vTareas(el){
   head('Tareas');
   const esDoc=session.rol==='docente';
-  const puedeCrear=esDoc||['admin','superadmin'].includes(session.rol);
+  const puedeCrear=esDoc; // solo el docente carga tareas
   let tareas=q('tareas');
   if(session.rol==='alumno'||session.rol==='familia'){const g=alumno(session.alumnoId).grado;tareas=tareas.filter(t=>t.grado===g);}
   else if(esDoc){tareas=tareas.filter(t=>t.docenteId===session.docenteId);}
   tareas=tareas.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
-  const titulo=session.rol==='alumno'||session.rol==='familia'?'📋 Tareas asignadas':'📋 Tareas';
+  const titulo=(session.rol==='alumno'||session.rol==='familia')?'📋 Tareas asignadas':'📋 Tareas';
   el.innerHTML=`<div class="pagetitle">${titulo}</div>
     ${tareas.map(t=>{const m=materia(t.materiaId);const doc=docente(t.docenteId);const venc=t.entrega&&t.entrega<hoy();
+      const mias=t.docenteId===session.docenteId;
+      const entregado=(session.rol==='alumno'||session.rol==='familia')&&yaEntrego(t);
+      const miEntrega=(t.entregas||[]).find(e=>e.alumnoId===session.alumnoId);
       return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:start">
         <div><h3 style="margin:0">${t.titulo}</h3><div class="muted" style="font-size:12px">${m?m.nombre:''} · ${t.grado}${doc?' · '+doc.nombre:''}</div></div>
         <span class="pill ${venc?'bad':'info'}">Entrega ${fmtFecha(t.entrega)}</span></div>
         <p style="margin:8px 0 0;font-size:14px;color:#334155">${t.descripcion||''}</p>
-        ${puedeCrear&&(esDoc?t.docenteId===session.docenteId:true)?`<div style="margin-top:8px"><button class="btn sm bad" onclick="borrarTarea('${t.id}')">Eliminar</button></div>`:''}
+        ${(t.archivos&&t.archivos.length)?`<div style="margin-top:8px">${archLinks(t.archivos)}</div>`:''}
+        ${esDoc&&mias?`<div class="muted" style="font-size:12px;margin-top:10px">✅ Entregas: ${(t.entregas||[]).length}</div>
+          ${(t.entregas||[]).map(e=>`<div class="filechip" style="background:#f1f5f9;color:#334155">👤 ${e.alumnoNombre||''} · ${fmtFecha(e.fecha)}${e.archivo?' 📎':''}</div>`).join('')}
+          <div style="margin-top:8px;display:flex;gap:6px"><button class="btn sm sec" onclick="modalTarea('${t.id}')">✏️ Editar</button><button class="btn sm bad" onclick="borrarTarea('${t.id}')">🗑️</button></div>`:''}
+        ${session.rol==='alumno'?(entregado
+            ?`<div class="pill ok" style="margin-top:10px;display:inline-block">✓ Entregada el ${fmtFecha(miEntrega.fecha)}</div> <button class="btn sm sec" onclick="modalEntrega('${t.id}')">Volver a publicar</button>`
+            :`<div style="margin-top:10px"><button class="btn ok sm" onclick="modalEntrega('${t.id}')">📤 Publicar tarea terminada</button></div>`):''}
+        ${session.rol==='familia'?(entregado?`<div class="pill ok" style="margin-top:10px;display:inline-block">✓ Entregada el ${fmtFecha(miEntrega.fecha)}</div>`:`<div class="pill bad" style="margin-top:10px;display:inline-block">Sin entregar</div>`):''}
       </div>`;}).join('')||empty(session.rol==='alumno'?'No tenés tareas pendientes 🎉':'Sin tareas cargadas')}
     ${puedeCrear?`<button class="fab" onclick="modalTarea()">+</button>`:''}`;
 }
-function modalTarea(){
-  let mats=q('materias');
-  if(session.rol==='docente')mats=mats.filter(m=>m.docenteId===session.docenteId);
+window._tkArch=[];
+function tkAddFiles(inp){const files=[...inp.files];let pend=files.length;
+  files.forEach(f=>{ if(f.size>700*1024){toast('"'+f.name+'" supera 700 KB, usá un enlace');pend--;if(!pend)tkRenderArch();return;}
+    const r=new FileReader();r.onload=e=>{window._tkArch.push({nombre:f.name,tipo:f.type,data:e.target.result});pend--;if(!pend)tkRenderArch();};
+    r.onerror=()=>{pend--;if(!pend)tkRenderArch();};r.readAsDataURL(f);});
+  inp.value='';}
+function tkAddLink(){const u=val('tk_link');if(!u)return;window._tkArch.push({nombre:(u.split('/').pop()||'Enlace'),url:u});const el=document.getElementById('tk_link');if(el)el.value='';tkRenderArch();}
+function tkRenderArch(){const d=document.getElementById('tk_archPrev');if(!d)return;
+  d.innerHTML=window._tkArch.map((a,i)=>`<span class="filechip">📎 ${a.nombre} <b onclick="window._tkArch.splice(${i},1);tkRenderArch()" style="cursor:pointer;color:#ef4444">✕</b></span>`).join('');}
+function modalTarea(id){
+  let mats=q('materias').filter(m=>m.docenteId===session.docenteId);
   if(!mats.length)return toast('No tenés materias asignadas');
-  modal(`<div class="modal-head"><h2>Nueva tarea</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
-    <div class="field"><label>Materia (define el grado)</label><select id="tk_mat">${mats.map(m=>`<option value="${m.id}" data-g="${m.grado}">${m.nombre} — ${m.grado}</option>`).join('')}</select></div>
-    <div class="field"><label>Título</label><input id="tk_tit" placeholder="Ej: Ejercicios de la unidad 3"></div>
-    <div class="field"><label>Descripción / consigna</label><textarea id="tk_desc" rows="4"></textarea></div>
-    <div class="field"><label>Fecha de entrega</label><input id="tk_ent" type="date" value="${hoy()}"></div>
-    <button class="btn" onclick="guardarTarea()">Publicar tarea</button>`);
+  const t=id?DB.tareas.find(x=>x.id===id):null;
+  window._tkArch=t&&t.archivos?JSON.parse(JSON.stringify(t.archivos)):[];
+  modal(`<div class="modal-head"><h2>${id?'Editar tarea':'Nueva tarea'}</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Materia (define el grado)</label><select id="tk_mat">${mats.map(m=>`<option value="${m.id}" data-g="${m.grado}" ${t&&t.materiaId===m.id?'selected':''}>${m.nombre} — ${m.grado}</option>`).join('')}</select></div>
+    <div class="field"><label>Título</label><input id="tk_tit" value="${t?(t.titulo||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Ejercicios de la unidad 3"></div>
+    <div class="field"><label>Descripción / consigna</label><textarea id="tk_desc" rows="4">${t?(t.descripcion||''):''}</textarea></div>
+    <div class="field"><label>Fecha de entrega</label><input id="tk_ent" type="date" value="${t?(t.entrega||hoy()):hoy()}"></div>
+    <div class="field"><label>Archivos adjuntos (PDF u otros, máx 700 KB c/u)</label>
+      <input id="tk_file" type="file" multiple onchange="tkAddFiles(this)">
+      <div style="display:flex;gap:6px;margin-top:8px"><input id="tk_link" placeholder="…o pegá un enlace (Drive, etc.)" style="flex:1"><button class="btn sm sec" style="width:auto;padding:0 12px" onclick="tkAddLink()">Agregar enlace</button></div>
+      <div id="tk_archPrev" style="margin-top:8px"></div></div>
+    <button class="btn" onclick="guardarTarea('${id||''}')">${id?'Guardar':'Publicar tarea'}</button>`);
+  tkRenderArch();
 }
-function guardarTarea(){
+function guardarTarea(id){
   const tit=val('tk_tit');if(!tit)return toast('Ingresá el título');
   const s=document.getElementById('tk_mat');const mid=s.value;const grado=s.selectedOptions[0].dataset.g;
   const m=materia(mid);
-  DB.tareas.push({id:uid('t'),colegioId:cid(),materiaId:mid,grado,docenteId:(session.docenteId||(m&&m.docenteId)),titulo:tit,descripcion:val('tk_desc'),fecha:hoy(),entrega:val('tk_ent')});
-  save();closeModal();toast('✅ Tarea publicada para los alumnos');go('tareas');
+  if(id){const t=DB.tareas.find(x=>x.id===id);if(!t)return;
+    Object.assign(t,{materiaId:mid,grado,titulo:tit,descripcion:val('tk_desc'),entrega:val('tk_ent'),archivos:window._tkArch.slice()});}
+  else DB.tareas.push({id:uid('t'),colegioId:cid(),materiaId:mid,grado,docenteId:(session.docenteId||(m&&m.docenteId)),titulo:tit,descripcion:val('tk_desc'),fecha:hoy(),entrega:val('tk_ent'),archivos:window._tkArch.slice(),entregas:[]});
+  window._tkArch=[];save();closeModal();toast(id?'Tarea actualizada':'✅ Tarea publicada para los alumnos');go('tareas');
 }
-function borrarTarea(id){DB.tareas=DB.tareas.filter(t=>t.id!==id);save();go('tareas');}
+function borrarTarea(id){confirmar('¿Eliminar esta tarea?',()=>{DB.tareas=DB.tareas.filter(t=>t.id!==id);save();closeModal();toast('Tarea eliminada');go('tareas');});}
+window._entArch=null;
+function enAddFile(inp){const f=inp.files[0];if(!f)return;
+  if(f.size>700*1024){toast('El archivo supera 700 KB, usá un enlace');inp.value='';return;}
+  const r=new FileReader();r.onload=e=>{window._entArch={nombre:f.name,tipo:f.type,data:e.target.result};const d=document.getElementById('en_prev');if(d)d.innerHTML=`<span class="filechip">📎 ${f.name}</span>`;};r.readAsDataURL(f);}
+function modalEntrega(tid){
+  window._entArch=null;
+  const t=DB.tareas.find(x=>x.id===tid);
+  modal(`<div class="modal-head"><h2>Publicar tarea terminada</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="font-size:13px;margin-bottom:8px">${t?t.titulo:''}</div>
+    <div class="field"><label>Comentario (opcional)</label><textarea id="en_com" rows="3" placeholder="Ej: entregué el trabajo completo"></textarea></div>
+    <div class="field"><label>Adjuntar archivo (opcional, máx 700 KB)</label><input type="file" onchange="enAddFile(this)"><div id="en_prev" style="margin-top:6px"></div></div>
+    <button class="btn ok" onclick="guardarEntrega('${tid}')">📤 Publicar como terminada</button>`);
+}
+function guardarEntrega(tid){
+  const t=DB.tareas.find(x=>x.id===tid);if(!t)return;
+  const al=alumno(session.alumnoId);
+  t.entregas=(t.entregas||[]).filter(e=>e.alumnoId!==session.alumnoId);
+  t.entregas.push({alumnoId:session.alumnoId,alumnoNombre:al?al.nombre:'',fecha:hoy(),comentario:val('en_com')||'',archivo:window._entArch||null});
+  window._entArch=null;save();closeModal();toast('✅ Tarea publicada como terminada');go('tareas');
+}
 function volverSuper(){if(_superReal)session=_superReal;state.colegioActivo=null;listenColegio(null);buildNav();go('home');}
 
 function vInstitucion(el){
