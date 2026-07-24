@@ -249,6 +249,11 @@ function seed(){
     {id:'n4',colegioId:cid,alumnoId:'a2',materiaId:'m1',periodo:'1er Periodo',nota:3},
     {id:'n5',colegioId:cid,alumnoId:'a2',materiaId:'m2',periodo:'1er Periodo',nota:4},
   ];
+  const notasParcial=[
+    {id:'np1',colegioId:cid,alumnoId:'a1',materiaId:'m1',periodo:'1er Parcial',nota:4},
+    {id:'np2',colegioId:cid,alumnoId:'a1',materiaId:'m2',periodo:'1er Parcial',nota:5},
+    {id:'np3',colegioId:cid,alumnoId:'a2',materiaId:'m1',periodo:'1er Parcial',nota:3},
+  ];
   const asistencia=[
     {id:'as1',colegioId:cid,alumnoId:'a1',fecha:hoy(),estado:'presente'},
     {id:'as2',colegioId:cid,alumnoId:'a2',fecha:hoy(),estado:'ausente'},
@@ -307,7 +312,14 @@ function seed(){
     {id:'t1',colegioId:cid,materiaId:'m1',grado:'6to grado',docenteId:'d1',titulo:'Ejercicios de fracciones',descripcion:'Resolver los ejercicios 1 al 10 de la página 45. Traer en carpeta.',fecha:hoy(),entrega:'2026-07-26'},
     {id:'t2',colegioId:cid,materiaId:'m2',grado:'6to grado',docenteId:'d2',titulo:'Lectura: "El principito"',descripcion:'Leer los capítulos 1 a 3 y escribir un resumen de media carilla.',fecha:hoy(),entrega:'2026-07-29'},
   ];
-  return {colegios,usuarios,alumnos,docentes,materias,notas,asistencia,mensualidades,caja,comunicados,eventos,pagosMembresia:[],examenes,horarioClases,tareas};
+  const boletinTarea=[
+    {id:'bt1',colegioId:cid,alumnoId:'a1',actividad:'Tarea: Ejercicios de fracciones',nota:5,motivo:'Entregó todos los ejercicios correctos y prolijos, a tiempo.',fecha:hoy(),autor:'Prof. Ricardo Gómez'},
+    {id:'bt2',colegioId:cid,alumnoId:'a1',actividad:'Exposición oral de Ciencias',nota:4,motivo:'Buena presentación, pero le faltó profundizar en las conclusiones.',fecha:hoy(),autor:'Prof. Carlos Ruiz'},
+  ];
+  const observaciones=[
+    {id:'ob1',colegioId:cid,alumnoId:'a1',tipo:'observacion',titulo:'Olvidó los materiales',detalle:'No trajo la carpeta de Matemática por segunda vez esta semana.',fecha:hoy(),autor:'Prof. Ricardo Gómez'},
+  ];
+  return {colegios,usuarios,alumnos,docentes,materias,notas,notasParcial,asistencia,mensualidades,caja,comunicados,eventos,pagosMembresia:[],examenes,horarioClases,tareas,boletinTarea,observaciones};
 }
 
 /* ==================== NUBE (Firebase) ==================== */
@@ -319,9 +331,9 @@ const firebaseConfig = {
   messagingSenderId: "10746163836",
   appId: "1:10746163836:web:b438f7e764a72691754ff9"
 };
-let DB={colegios:[],usuarios:[],pagosMembresia:[],alumnos:[],docentes:[],materias:[],notas:[],asistencia:[],mensualidades:[],caja:[],comunicados:[],eventos:[],examenes:[],horarioClases:[],tareas:[],libros:[]};
+let DB={colegios:[],usuarios:[],pagosMembresia:[],alumnos:[],docentes:[],materias:[],notas:[],notasParcial:[],asistencia:[],mensualidades:[],caja:[],comunicados:[],eventos:[],examenes:[],horarioClases:[],tareas:[],boletinTarea:[],observaciones:[],libros:[]};
 let fdb=null, fst=null, _dataUnsub=[], _lastJSON={}, _regUnsub=null, _pagosUnsub=null, _superReal=null;
-const COLLS_DATA=['alumnos','docentes','materias','notas','asistencia','mensualidades','caja','comunicados','eventos','examenes','horarioClases','tareas'];
+const COLLS_DATA=['alumnos','docentes','materias','notas','notasParcial','asistencia','mensualidades','caja','comunicados','eventos','examenes','horarioClases','tareas','boletinTarea','observaciones'];
 function regRef(){return fdb.collection('kevanix').doc('registry');}
 function pagosRef(){return fdb.collection('kevanix').doc('pagos');}
 function setupRef(){return fdb.collection('kevanix').doc('setup');}
@@ -471,8 +483,8 @@ function toast(msg){const t=document.createElement('div');t.className='toast';t.
 const NAV={
   superadmin:[['home','Panel','📊'],['colegios','Colegios','🏫'],['membresias','Membresías','💳'],['config','Ajustes','⚙️']],
   admin:[['home','Inicio','🏠'],['academico','Académico','📚'],['finanzas','Finanzas','💰'],['comunicados','Avisos','📢'],['mas','Más','⋯']],
-  docente:[['home','Inicio','🏠'],['notas','Notas','📝'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['mas','Más','⋯']],
-  familia:[['home','Inicio','🏠'],['boletin','Boletín','📄'],['tareas','Tareas','📋'],['pagos','Pagos','💰'],['mas','Más','⋯']],
+  docente:[['home','Inicio','🏠'],['notas','Calif final','📝'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['mas','Más','⋯']],
+  familia:[['home','Inicio','🏠'],['boletin','Bol. final','📄'],['tareas','Tareas','📋'],['pagos','Pagos','💰'],['mas','Más','⋯']],
   alumno:[['home','Inicio','🏠'],['tareas','Tareas','📋'],['examenes','Exámenes','📝'],['comunicados','Avisos','📢'],['mas','Más','⋯']],
 };
 function buildNav(){
@@ -490,11 +502,11 @@ function go(view){
   const R={
     home:vHome, colegios:vColegios, membresias:vMembresias, config:vConfig,
     academico:vAcademico, alumnos:vAlumnos, docentes:vDocentes, materias:vMaterias,
-    notas:vNotas, asistencia:vAsistencia, finanzas:vFinanzas, mensualidades:vMensualidades,
+    notas:vNotas, notasParcial:vNotasParcial, boletinParcial:vBoletinParcial, asistencia:vAsistencia, finanzas:vFinanzas, mensualidades:vMensualidades,
     caja:vCaja, deuda:vDeuda, faltas:vFaltas, comunicados:vComunicados, boletin:vBoletin,
     pagos:vPagos, horario:vHorario, calendario:vCalendario, mas:vMas, config:vConfig,
     institucion:vInstitucion, examenes:vExamenes, tareas:vTareas, usuarios:vUsuarios,
-    superusuarios:vSuperusuarios
+    superusuarios:vSuperusuarios, boletinTarea:vBoletinTarea, observaciones:vObservaciones
   };
   const fn=R[view]||vHome;
   window.scrollTo(0,0);
@@ -519,6 +531,13 @@ function notifList(){
       }
     });
   }
+  if(session.rol==='docente'){
+    q('tareas').filter(t=>t.docenteId===session.docenteId).forEach(t=>{
+      (t.entregas||[]).forEach(e=>{
+        out.push({t:'📥 Tarea entregada', d:`${e.alumnoNombre||'Un alumno'} entregó "${t.titulo}"`, ts:e.fecha, kind:'entrega', id:t.id+'|'+e.alumnoId});
+      });
+    });
+  }
   if(session.rol==='alumno'||session.rol==='familia'){
     const al=alumno(session.alumnoId); const g=al?al.grado:null;
     q('comunicados').forEach(c=>{
@@ -527,6 +546,11 @@ function notifList(){
     });
     q('tareas').filter(t=>t.grado===g).forEach(t=>{
       out.push({t:'📋 Nueva tarea', d:(t.titulo||'')+' · entrega '+fmtFecha(t.entrega), ts:t.fecha||'', kind:'tarea', id:t.id});
+    });
+  }
+  if(session.rol==='familia'){
+    q('observaciones').filter(o=>o.alumnoId===session.alumnoId).forEach(o=>{
+      out.push({t:'⚠️ Observación del colegio', d:o.titulo, ts:o.fecha, kind:'obs', id:o.id});
     });
   }
   return out.sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
@@ -538,7 +562,7 @@ function saveSeen(s){try{localStorage.setItem(seenKeyName(),JSON.stringify([...s
 function refreshBell(){
   const bell=document.getElementById('tbBell'),badge=document.getElementById('tbBadge');
   if(!bell||!session)return;
-  if(!['superadmin','alumno','familia'].includes(session.rol)){bell.style.display='none';return;}
+  if(!['superadmin','docente','alumno','familia'].includes(session.rol)){bell.style.display='none';return;}
   bell.style.display='';
   const list=notifList(),seen=seenSet();
   const n=list.filter(x=>!seen.has(notifKey(x))).length;
@@ -630,7 +654,8 @@ function vHomeAdmin(el){
       ${tile('alumnos','🎒','Alumnos','Gestión de estudiantes')}
       ${tile('docentes','👩‍🏫','Docentes','Personal docente')}
       ${tile('materias','📚','Materias','Asignaturas')}
-      ${tile('notas','📝','Calificaciones','Boletines')}
+      ${tile('notas','📝','Calificación final','Boletín final')}
+      ${tile('notasParcial','📝','Examen Parcial','Boletín de parciales')}
       ${tile('asistencia','✓','Asistencia','Faltas y tardanzas')}
     </div>
     <div class="sectionlabel">💰 Finanzas</div>
@@ -643,6 +668,8 @@ function vHomeAdmin(el){
     <div class="menu-grid">
       ${tile('usuarios','👥','Usuarios','Docentes y familias')}
       ${tile('tareas','📋','Tareas','Deberes')}
+      ${tile('boletinTarea','📘','Boletín de Tarea','Notas de actividades')}
+      ${tile('observaciones','⚠️','Observaciones','Faltas y conducta')}
       ${tile('examenes','📝','Exámenes','Horario')}
       ${tile('horario','🕐','Horario','Clases')}
       ${tile('comunicados','📢','Avisos','Institución/Docente')}
@@ -666,12 +693,15 @@ function vHomeDocente(el){
     <div class="list">${misMat.map(m=>`<div class="li"><div class="av">📕</div><div class="tx"><b>${m.nombre}</b><small>${m.grado}</small></div></div>`).join('')||empty('Sin materias asignadas')}</div>
     <div class="sectionlabel">Acciones</div>
     <div class="menu-grid">
-      ${tile('notas','📝','Cargar notas','Calificaciones')}
+      ${tile('notas','📝','Calificación final','Cargar notas finales')}
+      ${tile('notasParcial','📝','Examen Parcial','Cargar parciales')}
       ${tile('asistencia','✓','Tomar asistencia','Del día')}
       ${tile('tareas','📋','Tareas','Cargar deberes')}
       ${tile('examenes','📝','Exámenes','Programar')}
       ${tile('horario','🕐','Horario','Clases')}
       ${tile('calendario','📅','Calendario','Eventos')}
+      ${tile('boletinTarea','📘','Boletín de Tarea','Calificar actividades')}
+      ${tile('observaciones','⚠️','Observaciones','Faltas y conducta')}
     </div>`;
 }
 
@@ -702,11 +732,14 @@ function vHomeFamilia(el){
     </div>
     <div class="sectionlabel">Accesos</div>
     <div class="menu-grid">
-      ${session.rol==='familia'?tile('boletin','📄','Boletín','Calificaciones'):''}
+      ${session.rol==='familia'?tile('boletin','📄','Boletín Calif. Final','Notas finales'):''}
+      ${session.rol==='familia'?tile('boletinParcial','📝','Boletín Examen Parcial','Notas de parciales'):''}
       ${tile('tareas','📋','Tareas','Deberes')}
       ${tile('examenes','📝','Exámenes','Horario')}
       ${tile('horario','🕐','Horario','Clases')}
       ${session.rol==='familia'?tile('pagos','💰','Pagos','Cuotas'):''}
+      ${tile('boletinTarea','📘','Boletín de Tarea','Notas de actividades')}
+      ${session.rol==='familia'?tile('observaciones','⚠️','Observaciones','Privado de tu hijo/a'):''}
       ${tile('comunicados','📢','Avisos','Institución/Docente')}
       ${tile('calendario','📅','Calendario','Eventos')}
     </div>`;
@@ -929,7 +962,8 @@ function vAcademico(el){
      ${tile('alumnos','🎒','Alumnos','Estudiantes')}
      ${tile('docentes','👩‍🏫','Docentes','Personal')}
      ${tile('materias','📚','Materias','Asignaturas')}
-     ${tile('notas','📝','Calificaciones','Boletines')}
+     ${tile('notas','📝','Calificación final','Boletín final')}
+     ${tile('notasParcial','📝','Examen Parcial','Boletín de parciales')}
      ${tile('asistencia','✓','Asistencia','Registro diario')}
      ${tile('faltas','📋','Reporte faltas','Inasistencias')}
    </div>`;
@@ -968,7 +1002,9 @@ function verAlumno(id){
     <button class="btn sec" onclick="modalAlumno('${id}')">✏️ Editar / cambiar foto</button>
     <div style="height:8px"></div>
     <div class="row"><button class="btn" onclick="pdfBoletin('${id}')">📄 Boletín PDF</button>
-    <button class="btn ok" onclick="waAlumno('${id}')">💬 WhatsApp</button></div>`);
+    <button class="btn ok" onclick="waAlumno('${id}')">💬 WhatsApp</button></div>
+    <div style="height:8px"></div>
+    <button class="btn warn" onclick="modalObservacion('${id}')">⚠️ Registrar falta grave / observación</button>`);
 }
 function modalAlumno(id){
   const a=id?alumno(id):{};
@@ -1046,10 +1082,11 @@ function borrarMateria(id){confirmar('¿Eliminar esta materia?',()=>{DB.materias
 
 /* -------- NOTAS -------- */
 function vNotas(el){
-  head('Calificaciones');
+  head('Boletín de Calificación final');
   let mats=q('materias');
   if(session.rol==='docente')mats=mats.filter(m=>m.docenteId===session.docenteId);
-  el.innerHTML=`<div class="pagetitle">Cargar calificaciones</div>
+  el.innerHTML=`<div class="pagetitle">Boletín de Calificación final</div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Cargá las notas finales por materia y período.</div>
     <div class="field"><label>Materia</label><select id="nt_mat" onchange="renderNotasTabla()">${mats.map(m=>`<option value="${m.id}">${m.nombre} · ${m.grado}</option>`).join('')}</select></div>
     <div class="field"><label>Período</label><select id="nt_per" onchange="renderNotasTabla()"><option>1er Periodo</option><option>2do Periodo</option><option>3er Periodo</option></select></div>
     <div id="notasTabla"></div>`;
@@ -1072,6 +1109,38 @@ function setNota(aid,mid,per,v){
   let nt=DB.notas.find(n=>n.alumnoId===aid&&n.materiaId===mid&&n.periodo===per);
   if(nt)nt.nota=v;else DB.notas.push({id:uid('n'),colegioId:cid(),alumnoId:aid,materiaId:mid,periodo:per,nota:v});
   save();toast(notaLabel(v)+' ('+v+')');renderNotasTabla();
+}
+
+/* -------- BOLETÍN DE EXAMEN PARCIAL -------- */
+const PARCIALES=['1er Parcial','2do Parcial','3er Parcial','4to Parcial'];
+function vNotasParcial(el){
+  head('Boletín de Examen Parcial');
+  let mats=q('materias');
+  if(session.rol==='docente')mats=mats.filter(m=>m.docenteId===session.docenteId);
+  el.innerHTML=`<div class="pagetitle">Boletín de Examen Parcial</div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Cargá las notas de los exámenes parciales por materia.</div>
+    <div class="field"><label>Materia</label><select id="np_mat" onchange="renderParcialTabla()">${mats.map(m=>`<option value="${m.id}">${m.nombre} · ${m.grado}</option>`).join('')}</select></div>
+    <div class="field"><label>Parcial</label><select id="np_per" onchange="renderParcialTabla()">${PARCIALES.map(p=>`<option>${p}</option>`).join('')}</select></div>
+    <div id="parcialTabla"></div>`;
+  renderParcialTabla();
+}
+function renderParcialTabla(){
+  const mid=val('np_mat'),per=val('np_per');const m=materia(mid);if(!m)return;
+  const als=q('alumnos').filter(a=>a.grado===m.grado);
+  const cont=document.getElementById('parcialTabla');if(!cont)return;
+  cont.innerHTML=`<div class="card"><h3>${m.nombre} — ${m.grado}</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">Nota del examen parcial · escala MEC 1–5 (aprueba desde ${NOTA_APRUEBA}).</div>
+    ${als.map(a=>{const nt=DB.notasParcial.find(n=>n.alumnoId===a.id&&n.materiaId===mid&&n.periodo===per);
+      return `<div class="li" style="padding:10px 0">${avatarAlumno(a)}<div class="tx"><b>${a.nombre}</b>${nt?`<small style="color:${notaColor(nt.nota)}">${notaLabel(nt.nota)}</small>`:''}</div>
+        <input type="number" min="${NOTA_MIN}" max="${NOTA_MAX}" step="1" style="width:64px;text-align:center;font-weight:700" value="${nt?nt.nota:''}" placeholder="—" onchange="setNotaParcial('${a.id}','${mid}','${per}',this.value)"></div>`;}).join('')||empty('Sin alumnos en este grado')}
+    </div>`;
+}
+function setNotaParcial(aid,mid,per,v){
+  v=Math.round(parseFloat(v));if(isNaN(v))return;
+  if(v<NOTA_MIN)v=NOTA_MIN; if(v>NOTA_MAX)v=NOTA_MAX;
+  let nt=DB.notasParcial.find(n=>n.alumnoId===aid&&n.materiaId===mid&&n.periodo===per);
+  if(nt)nt.nota=v;else DB.notasParcial.push({id:uid('np'),colegioId:cid(),alumnoId:aid,materiaId:mid,periodo:per,nota:v});
+  save();toast(notaLabel(v)+' ('+v+')');renderParcialTabla();
 }
 
 /* -------- ASISTENCIA -------- */
@@ -1296,11 +1365,13 @@ function borrarComunicado(id){const c=DB.comunicados.find(x=>x.id===id);if(!c||!
 
 /* -------- BOLETÍN (familia/alumno) -------- */
 function docenteDeMateria(mid){const m=materia(mid);const d=m?docente(m.docenteId):null;return d?d.nombre:'—';}
-function vBoletin(el){
-  head('Boletín');
-  if(session.rol==='alumno'){el.innerHTML=`<div class="pagetitle">Boletín</div>${empty('El boletín está disponible en el perfil de la familia','Pedile a tu familia que lo consulte')}`;return;}
+function vBoletin(el){vBoletinGen(el,DB.notas,'Boletín de Calificación final','pdfBoletin');}
+function vBoletinParcial(el){vBoletinGen(el,DB.notasParcial,'Boletín de Examen Parcial','pdfBoletinParcial');}
+function vBoletinGen(el,fuente,titulo,pdfFn){
+  head(titulo);
+  if(session.rol==='alumno'){el.innerHTML=`<div class="pagetitle">${titulo}</div>${empty('Disponible en el perfil de la familia','Pedile a tu familia que lo consulte')}`;return;}
   const al=alumno(session.alumnoId);
-  const notas=DB.notas.filter(n=>n.alumnoId===al.id);
+  const notas=fuente.filter(n=>n.alumnoId===al.id);
   const prom=promedio(notas.map(n=>n.nota));
   const c=colegio();
   const logo=c&&c.logo?`<img src="${c.logo}" style="width:46px;height:46px;border-radius:10px;object-fit:cover">`:`<div style="width:46px;height:46px;border-radius:10px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:22px">🏫</div>`;
@@ -1308,7 +1379,7 @@ function vBoletin(el){
     <div class="card" style="display:flex;align-items:center;gap:12px">
       ${logo}
       <div><div style="font-weight:800;font-size:16px">${c?c.nombre:'Institución'}</div>
-      <div class="muted" style="font-size:12px">Boletín de calificaciones${c&&c.ciudad?' · '+c.ciudad:''}</div></div>
+      <div class="muted" style="font-size:12px">${titulo}${c&&c.ciudad?' · '+c.ciudad:''}</div></div>
     </div>
     <div class="pagetitle">${al.nombre}</div>
     <div class="card"><div class="scroll"><table class="tbl"><tr><th>Materia</th><th>Docente</th><th>Período</th><th>Nota</th><th>Concepto</th></tr>
@@ -1318,7 +1389,7 @@ function vBoletin(el){
     <div class="kv"><span>Promedio general</span><b style="font-size:18px">${prom}</b></div>
     <div class="kv"><span>Situación</span><b><span class="pill ${Number(prom)>=NOTA_APRUEBA?'ok':'bad'}">${prom==='—'?'—':(Number(prom)>=NOTA_APRUEBA?'Aprobado':'No aprobado')}</span></b></div>
     <div class="muted" style="font-size:11px;margin-top:8px">Escala MEC Paraguay 1–5 · aprueba desde ${NOTA_APRUEBA}</div></div>
-    <button class="btn" onclick="pdfBoletin('${al.id}')">📄 Descargar boletín PDF</button>`;
+    <button class="btn" onclick="${pdfFn}('${al.id}')">📄 Descargar PDF</button>`;
 }
 
 /* -------- PAGOS (familia) -------- */
@@ -1406,15 +1477,20 @@ function vMas(el){
     faltas:tile('faltas','📋','Reporte faltas','Inasistencias'),
     institucion:tile('institucion','🏫','Institución','Datos y logo'),
     usuarios:tile('usuarios','👥','Usuarios','Docentes, familias, alumnos'),
-    boletin:tile('boletin','📄','Boletín','Calificaciones'),
+    notas:tile('notas','📝','Calificación final','Cargar notas finales'),
+    notasParcial:tile('notasParcial','📝','Examen Parcial','Cargar parciales'),
+    boletin:tile('boletin','📄','Boletín Calif. Final','Notas finales'),
+    boletinParcial:tile('boletinParcial','📝','Boletín Examen Parcial','Notas de parciales'),
+    boletinTarea:tile('boletinTarea','📘','Boletín de Tarea','Notas de actividades'),
+    observaciones:tile('observaciones','⚠️','Observaciones','Faltas y conducta'),
     pagos:tile('pagos','💰','Pagos','Cuotas'),
     config:tile('config','⚙️','Ajustes','Configuración'),
   };
   const sets={
-    admin:['usuarios','institucion','examenes','horario','tareas','calendario','faltas','config'],
-    docente:['tareas','examenes','horario','asistencia','comunicados','calendario'],
-    alumno:['examenes','horario','comunicados','calendario'],
-    familia:['examenes','horario','tareas','comunicados','calendario','config'],
+    admin:['usuarios','institucion','notas','notasParcial','examenes','horario','tareas','boletinTarea','observaciones','calendario','faltas','config'],
+    docente:['notas','notasParcial','tareas','boletinTarea','observaciones','examenes','horario','asistencia','comunicados','calendario'],
+    alumno:['examenes','horario','boletinTarea','comunicados','calendario'],
+    familia:['boletin','boletinParcial','examenes','horario','tareas','boletinTarea','observaciones','comunicados','calendario','config'],
   };
   const items=(sets[session.rol]||sets.admin).map(k=>T[k]).join('');
   el.innerHTML=`<div class="pagetitle">Más</div><div class="menu-grid">${items}</div>
@@ -1610,6 +1686,100 @@ function guardarEntrega(tid){
   t.entregas=(t.entregas||[]).filter(e=>e.alumnoId!==session.alumnoId);
   t.entregas.push({alumnoId:session.alumnoId,alumnoNombre:al?al.nombre:'',fecha:hoy(),comentario:val('en_com')||'',archivo:window._entArch||null});
   window._entArch=null;save();closeModal();toast('✅ Tarea publicada como terminada');go('tareas');
+}
+
+/* ============================================================
+   BOLETÍN DE TAREA (notas por actividad, con motivo)
+   ============================================================ */
+function vBoletinTarea(el){
+  head('Boletín de Tarea');
+  const puede=['docente','admin','superadmin'].includes(session.rol);
+  let items=q('boletinTarea');
+  if(session.rol==='alumno'||session.rol==='familia'){items=items.filter(x=>x.alumnoId===session.alumnoId);}
+  items=items.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  el.innerHTML=`<div class="pagetitle">📘 Boletín de Tarea</div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Notas de tareas y actividades, con el motivo de cada calificación.</div>
+    ${items.map(x=>{const a=alumno(x.alumnoId);
+      return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:start">
+        <div><h3 style="margin:0">${x.actividad||'Actividad'}</h3>
+        <div class="muted" style="font-size:12px">${(puede&&a)?a.nombre+' · ':''}${fmtFecha(x.fecha)}${x.autor?' · '+x.autor:''}</div></div>
+        <b style="color:${notaColor(x.nota)};font-size:24px">${x.nota}</b></div>
+        ${x.motivo?`<p style="margin:8px 0 0;font-size:14px;color:#334155"><b>Motivo:</b> ${x.motivo}</p>`:''}
+        ${puede?`<div style="margin-top:8px;display:flex;gap:6px"><button class="btn sm sec" onclick="modalBoletinTarea('${x.id}')">✏️ Editar</button><button class="btn sm bad" onclick="borrarBoletinTarea('${x.id}')">🗑️</button></div>`:''}
+      </div>`;}).join('')||empty('Sin calificaciones cargadas',puede?'Tocá + para calificar una actividad':'')}
+    ${puede?`<button class="fab" onclick="modalBoletinTarea()">+</button>`:''}`;
+}
+function modalBoletinTarea(id){
+  const x=id?DB.boletinTarea.find(y=>y.id===id):null;
+  let als=q('alumnos');
+  if(session.rol==='docente'){const gs=[...new Set(DB.materias.filter(m=>m.docenteId===session.docenteId&&m.colegioId===cid()).map(m=>m.grado))];als=als.filter(a=>gs.includes(a.grado));}
+  if(!als.length)return toast('No hay alumnos disponibles');
+  modal(`<div class="modal-head"><h2>${id?'Editar nota':'Calificar actividad'}</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Alumno</label><select id="bt_al">${als.map(a=>`<option value="${a.id}" ${x&&x.alumnoId===a.id?'selected':''}>${a.nombre} — ${a.grado}</option>`).join('')}</select></div>
+    <div class="field"><label>Actividad / Tarea</label><input id="bt_act" value="${x?(x.actividad||'').replace(/"/g,'&quot;'):''}" placeholder="Ej: Tarea de fracciones, exposición oral..."></div>
+    <div class="field"><label>Nota (escala MEC 1 a 5)</label><input id="bt_nota" type="number" min="1" max="5" step="1" value="${x?x.nota:''}"></div>
+    <div class="field"><label>Motivo de la nota / detalle</label><textarea id="bt_mot" rows="3" placeholder="Ej: entregó completo y a tiempo…">${x?(x.motivo||''):''}</textarea></div>
+    <button class="btn" onclick="guardarBoletinTarea('${id||''}')">${id?'Guardar':'Cargar nota'}</button>`);
+}
+function guardarBoletinTarea(id){
+  const aid=val('bt_al'),act=val('bt_act');if(!act)return toast('Ingresá la actividad');
+  let nota=Math.round(parseFloat(val('bt_nota')));if(isNaN(nota))return toast('Ingresá la nota');
+  if(nota<1)nota=1;if(nota>5)nota=5;
+  const mot=val('bt_mot');
+  if(id){const x=DB.boletinTarea.find(y=>y.id===id);if(!x)return;Object.assign(x,{alumnoId:aid,actividad:act,nota,motivo:mot});}
+  else DB.boletinTarea.push({id:uid('bt'),colegioId:cid(),alumnoId:aid,actividad:act,nota,motivo:mot,fecha:hoy(),autor:session.nombre});
+  save();closeModal();toast(id?'Nota actualizada':'✅ Nota cargada en el Boletín de Tarea');go('boletinTarea');
+}
+function borrarBoletinTarea(id){confirmar('¿Eliminar esta nota?',()=>{DB.boletinTarea=DB.boletinTarea.filter(y=>y.id!==id);save();closeModal();toast('Nota eliminada');go('boletinTarea');});}
+
+/* ============================================================
+   OBSERVACIONES / FALTAS GRAVES (privadas para los padres)
+   ============================================================ */
+const OBS_LBL={falta_grave:'🚫 Falta grave',observacion:'📝 Observación / conducta',rendimiento:'📉 Bajo rendimiento'};
+function modalObservacion(aid){
+  const a=aid?alumno(aid):null;
+  let als=q('alumnos');
+  if(session.rol==='docente'){const gs=[...new Set(DB.materias.filter(m=>m.docenteId===session.docenteId&&m.colegioId===cid()).map(m=>m.grado))];als=als.filter(x=>gs.includes(x.grado));}
+  if(!a&&!als.length)return toast('No hay alumnos disponibles');
+  const alField=a
+    ? `<div class="muted" style="font-size:13px;margin-bottom:10px"><b>${a.nombre}</b> · ${a.grado}</div><input type="hidden" id="ob_al" value="${aid}">`
+    : `<div class="field"><label>Alumno</label><select id="ob_al">${als.map(x=>`<option value="${x.id}">${x.nombre} — ${x.grado}</option>`).join('')}</select></div>`;
+  modal(`<div class="modal-head"><h2>Observación / Falta grave</h2><button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Esto lo verán <b>solo los padres/tutor</b> del alumno, y les llega como notificación.</div>
+    ${alField}
+    <div class="field"><label>Tipo</label><select id="ob_tipo">
+      <option value="falta_grave">Falta grave</option>
+      <option value="observacion">Observación / conducta</option>
+      <option value="rendimiento">Bajo rendimiento</option>
+    </select></div>
+    <div class="field"><label>Título</label><input id="ob_tit" placeholder="Ej: Falta de respeto en clase"></div>
+    <div class="field"><label>Detalle / motivo</label><textarea id="ob_det" rows="3"></textarea></div>
+    <button class="btn warn" onclick="guardarObservacion()">Registrar y notificar a los padres</button>`);
+}
+function guardarObservacion(){
+  const aid=val('ob_al');if(!aid)return toast('Elegí un alumno');
+  const tit=val('ob_tit');if(!tit)return toast('Ingresá un título');
+  DB.observaciones.push({id:uid('ob'),colegioId:cid(),alumnoId:aid,tipo:val('ob_tipo'),titulo:tit,detalle:val('ob_det'),fecha:hoy(),autor:session.nombre});
+  save();closeModal();toast('⚠️ Observación registrada · los padres serán notificados');go(state.view);
+}
+function vObservaciones(el){
+  head('Observaciones');
+  if(['docente','admin','superadmin'].includes(session.rol)){
+    el.innerHTML=`<div class="pagetitle">⚠️ Observaciones y faltas</div>
+      <div class="muted" style="font-size:13px;margin-bottom:14px">Registrá una falta grave u observación de un alumno. Es privado: solo los padres/tutor del alumno la ven, y les llega como notificación en su celular.</div>
+      <button class="btn warn" onclick="modalObservacion()">⚠️ Registrar falta grave / observación</button>`;
+    return;
+  }
+  if(session.rol!=='familia'){el.innerHTML=`<div class="pagetitle">Observaciones</div>${empty('Sección privada','Solo los padres/tutor pueden ver las observaciones')}`;return;}
+  const a=alumno(session.alumnoId);
+  const items=q('observaciones').filter(o=>o.alumnoId===session.alumnoId).slice().sort((x,y)=>(y.fecha||'').localeCompare(x.fecha||''));
+  el.innerHTML=`<div class="pagetitle">⚠️ Observaciones${a?' de '+a.nombre:''}</div>
+    <div class="muted" style="font-size:13px;margin-bottom:10px">Información privada para los padres/tutor.</div>
+    ${items.map(o=>`<div class="card" style="border-left:4px solid #f59e0b">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="avlabel" style="background:#fef3c7;color:#92400e">${OBS_LBL[o.tipo]||'Observación'}</span><span class="pill info">${fmtFecha(o.fecha)}</span></div>
+      <h3 style="margin:6px 0 0">${o.titulo}</h3>
+      ${o.detalle?`<p style="margin:6px 0 0;font-size:14px;color:#334155">${o.detalle}</p>`:''}
+      <div class="muted" style="font-size:12px;margin-top:6px">— ${o.autor||''}</div></div>`).join('')||empty('Sin observaciones','Todo en orden 🎉')}`;
 }
 function volverSuper(){if(_superReal)session=_superReal;state.colegioActivo=null;listenColegio(null);buildNav();go('home');}
 
@@ -1884,10 +2054,12 @@ function pdfHeader(doc,titulo){
   doc.setFontSize(11);doc.setFont(undefined,'normal');doc.text(titulo,tx,21);
   doc.setTextColor(0);
 }
-function pdfBoletin(id){
+function pdfBoletin(id){pdfBoletinGen(id,DB.notas,'Boletín de calificación final','Boletin_Final');}
+function pdfBoletinParcial(id){pdfBoletinGen(id,DB.notasParcial,'Boletín de examen parcial','Boletin_Parcial');}
+function pdfBoletinGen(id,fuente,titulo,prefijo){
   const doc=makeDoc();
-  const a=alumno(id);const notas=DB.notas.filter(n=>n.alumnoId===id);
-  pdfHeader(doc,'Boletín de calificaciones');
+  const a=alumno(id);const notas=fuente.filter(n=>n.alumnoId===id);
+  pdfHeader(doc,titulo);
   doc.setFontSize(12);let y=40;
   doc.setFont(undefined,'bold');doc.text('Alumno: ',14,y);doc.setFont(undefined,'normal');doc.text(a.nombre,40,y);y+=7;
   doc.setFont(undefined,'bold');doc.text('Grado: ',14,y);doc.setFont(undefined,'normal');doc.text(a.grado,40,y);y+=7;
@@ -1910,7 +2082,7 @@ function pdfBoletin(id){
   y+=8;doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(120);
   doc.text('Escala MEC Paraguay: 5 Muy bueno/Excelente, 4 Bueno/Satisfactorio, 3 Regular/Aceptable, 2 Poco satisfactorio, 1 Reprobado. Aprueba desde '+NOTA_APRUEBA+'.',14,y);
   doc.setFontSize(9);doc.setTextColor(120);doc.text('Documento generado por '+colName()+' · '+fmtFecha(hoy()),14,285);
-  doc.save('Boletin_'+a.nombre.replace(/ /g,'_')+'.pdf');toast('📄 Boletín PDF generado');
+  doc.save(prefijo+'_'+a.nombre.replace(/ /g,'_')+'.pdf');toast('📄 Boletín PDF generado');
 }
 function pdfDeuda(){
   const doc=makeDoc();
