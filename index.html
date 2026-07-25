@@ -1017,6 +1017,9 @@ function modalAlumno(id){
     </div>
     <div class="field"><label>Nombre completo</label><input id="a_nom" value="${a.nombre||''}"></div>
     <div class="field"><label>Grado / Curso</label><input id="a_gr" value="${a.grado||''}" placeholder="Ej: 6to grado"></div>
+    <div class="field"><label>Turno</label><select id="a_turno">
+      ${['','Mañana','Tarde','Noche'].map(t=>`<option value="${t}" ${(a.turno||'')===t?'selected':''}>${t||'— sin turno —'}</option>`).join('')}
+    </select></div>
     <div class="field"><label>Cédula (C.I.)</label><input id="a_dni" value="${a.dni||''}"></div>
     <div class="field"><label>Nombre del tutor / madre / padre</label><input id="a_tut" value="${a.tutor||''}"></div>
     <div class="field"><label>Teléfono (con código país)</label><input id="a_tel" value="${a.telefono||''}" placeholder="595981..."></div>
@@ -1025,7 +1028,7 @@ function modalAlumno(id){
 function pickFoto(inp){readImage(inp.files[0],180,d=>{if(!d)return toast('No se pudo leer la imagen');window._fotoTmp=d;const p=document.getElementById('fotoPrev');p.style.background="#eef2ff url('"+d+"') center/cover";p.textContent='';},0.55);}
 function guardarAlumno(id){
   const n=val('a_nom');if(!n)return toast('Ingresá el nombre');
-  const datos={nombre:n,grado:val('a_gr'),dni:val('a_dni'),tutor:val('a_tut'),telefono:val('a_tel'),foto:window._fotoTmp||null};
+  const datos={nombre:n,grado:val('a_gr'),turno:val('a_turno'),dni:val('a_dni'),tutor:val('a_tut'),telefono:val('a_tel'),foto:window._fotoTmp||null};
   if(id){Object.assign(alumno(id),datos);}
   else DB.alumnos.push({id:uid('a'),colegioId:cid(),...datos});
   window._fotoTmp=null;save();closeModal();toast(id?'Alumno actualizado':'Alumno agregado');go('alumnos');
@@ -1801,8 +1804,10 @@ function vInstitucion(el){
       <div class="field"><label>Teléfono (con código país)</label><input id="i_tel" value="${(c.telefono||'').replace(/"/g,'&quot;')}" placeholder="595981..."></div>
       <div class="field"><label>Dirección</label><input id="i_dir2" value="${(c.direccion||'').replace(/"/g,'&quot;')}" placeholder="Calle y número"></div>
       <div class="field"><label>Correo</label><input id="i_mail" value="${(c.email||'').replace(/"/g,'&quot;')}" placeholder="colegio@correo.com"></div>
+      <div class="field"><label>RUC de la ACE (para los recibos)</label><input id="i_ruc" value="${(c.ruc||'').replace(/"/g,'&quot;')}" placeholder="Ej: 80012345-6"></div>
       <div class="field"><label>Monto de matrícula (₲)</label><input id="i_mat" type="number" value="${c.matricula||''}" placeholder="Ej: 150000"></div>
       <div class="field"><label>Cuota mensual sugerida (₲)</label><input id="i_cuota" type="number" value="${c.cuota||''}" placeholder="Ej: 350000"></div>
+      <div class="field"><label>Nota legal del recibo (opcional)</label><textarea id="i_nota" rows="2" placeholder="Texto que aparece en 'NOTA LEGAL IMPORTANTE' del recibo">${c.notaLegal||''}</textarea></div>
       <button class="btn" onclick="guardarInstitucion()">Guardar datos</button>
     </div>
     <div class="muted" style="font-size:12px;text-align:center">El logo y el nombre aparecen en la barra superior y en todos los reportes y recibos PDF.</div>`;
@@ -1812,7 +1817,7 @@ function guardarInstitucion(){
   const c=colegio();if(!c)return;
   const nom=val('i_nom');if(!nom)return toast('Ingresá el nombre de la institución');
   c.nombre=nom;c.ciudad=val('i_ciu');c.director=val('i_dir');c.telefono=val('i_tel');c.logo=window._logoTmp||null;
-  c.direccion=val('i_dir2');c.email=val('i_mail');
+  c.direccion=val('i_dir2');c.email=val('i_mail');c.ruc=val('i_ruc');c.notaLegal=val('i_nota');
   const mm=parseFloat(val('i_mat'));if(!isNaN(mm))c.matricula=mm;
   const cq=parseFloat(val('i_cuota'));if(!isNaN(cq))c.cuota=cq;
   window._logoTmp=null;save();toast('Datos de la institución guardados');go('home');
@@ -2157,37 +2162,53 @@ function numeroALetras(n){
 }
 
 /* -------- Boleta / recibo de pago (matrícula o cuota) -------- */
+const MESES_LARGO=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function wrapTxt(str,max){const w=String(str||'').split(' ');const out=[];let cur='';w.forEach(word=>{if((cur+' '+word).trim().length>max){if(cur)out.push(cur);cur=word;}else{cur=(cur+' '+word).trim();}});if(cur)out.push(cur);return out;}
+function capFirst(s){s=String(s||'');return s.charAt(0).toUpperCase()+s.slice(1);}
 function pdfBoleta(aid,concepto,monto){
-  const a=alumno(aid);const c=colegio();const doc=makeDoc();
-  pdfHeader(doc,'Boleta de pago');
-  const nro=String(nuevoRecibo()).padStart(5,'0');
-  let y=40;
-  doc.setFontSize(12);doc.setFont(undefined,'bold');
-  doc.text('BOLETA / RECIBO N°: '+nro,14,y);
-  doc.setFont(undefined,'normal');doc.setFontSize(11);doc.text('Fecha: '+fmtFecha(hoy()),150,y);y+=8;
-  if(c){doc.setFontSize(9);doc.setTextColor(90);
-    doc.text([(c.ciudad?'Ciudad: '+c.ciudad:''),'Tel: '+(c.telefono||'-')].filter(Boolean).join('     '),14,y);
-    doc.setTextColor(0);y+=6;}
-  y+=2;doc.setDrawColor(210);doc.line(14,y,196,y);y+=11;
+  const a=alumno(aid)||{};const c=colegio()||{};const doc=makeDoc();
+  const KK=72/25.4;
+  const wmm=(s,sz,bold)=>(String(s).length*(bold?0.56:0.52)*sz)/KK;
+  const cen=(s,y,sz,bold)=>{doc.setFontSize(sz);doc.setFont(undefined,bold?'bold':'normal');doc.text(s,Math.max(14,(210-wmm(s,sz,bold))/2),y);};
+  const dbl=(y)=>{doc.setDrawColor(30,58,138);doc.line(14,y,196,y);doc.line(14,y+1.3,196,y+1.3);};
+  const sng=(y)=>{doc.setDrawColor(160);doc.line(14,y,196,y);};
+  const nro='001-001-'+String(nuevoRecibo()).padStart(6,'0');
+  const d=new Date();
+  const fechaLarga=(c.ciudad||'............')+', '+d.getDate()+' de '+MESES_LARGO[d.getMonth()]+' de '+d.getFullYear();
+  let y=22;
+  dbl(y);y+=9;
+  cen((c.nombre||'Institución Educativa').toUpperCase(),y,13,true);y+=6.5;
+  cen('RUC: '+(c.ruc||'.......................'),y,10,false);y+=5.5;
+  cen('Distrito: '+(c.ciudad||'.................')+' - Paraguay',y,10,false);y+=5.5;
+  cen(fechaLarga,y,10,false);y+=7;
+  dbl(y);y+=11;
+  doc.setFont(undefined,'bold');doc.setFontSize(12);doc.text('RECIBO DE DINERO',16,y);
+  doc.text('N°: '+nro,118,y);y+=13;
+  doc.setFillColor(240,244,255);doc.rect(14,y-6,182,12,'F');
+  doc.setFont(undefined,'bold');doc.setFontSize(13);doc.text('VALOR: '+moneyG(monto),18,y+2);
+  doc.setFont(undefined,'normal');doc.setFontSize(9);doc.setTextColor(90);doc.text('(en números)',158,y+2);doc.setTextColor(0);y+=17;
   doc.setFontSize(11);
-  const kv=(k,v)=>{doc.setFont(undefined,'bold');doc.text(k,14,y);doc.setFont(undefined,'normal');doc.text(String(v),55,y);y+=8;};
-  kv('Alumno:',a.nombre);
-  kv('Grado:',a.grado||'-');
-  kv('Tutor:',a.tutor||'-');
-  kv('Concepto:',concepto);
-  y+=5;
-  doc.setFillColor(240,244,255);doc.rect(14,y-6,182,14,'F');
-  doc.setFont(undefined,'bold');doc.setFontSize(14);
-  doc.text('TOTAL PAGADO:',18,y+3);doc.text(moneyG(monto),150,y+3);y+=19;
-  doc.setFont(undefined,'normal');doc.setFontSize(10);
-  doc.text('Son: '+numeroALetras(monto)+' guaraníes.',14,y);y+=22;
-  doc.setDrawColor(120);doc.line(120,y,190,y);y+=6;
-  doc.setFontSize(10);doc.text('Recibí conforme',138,y);
-  doc.setFontSize(8);doc.setTextColor(120);
-  doc.text('Comprobante generado por '+colName()+' · '+fmtFecha(hoy()),14,285);
-  doc.save('Boleta_'+nro+'_'+a.nombre.replace(/ /g,'_')+'.pdf');
-  toast('🧾 Boleta N° '+nro+' generada');
+  doc.setFont(undefined,'bold');doc.text('Recibí(mos) del Sr./Sra.:',16,y);doc.setFont(undefined,'normal');doc.text(a.tutor||'..............................................',68,y);y+=8;
+  doc.setFont(undefined,'bold');doc.text('La cantidad de Guaraníes:',16,y);doc.setFont(undefined,'normal');y+=6;
+  wrapTxt(capFirst(numeroALetras(monto)),96).forEach(l=>{doc.text(l,16,y);y+=5.5;});
+  doc.setFontSize(9);doc.setTextColor(90);doc.text('(en letras)',16,y);doc.setTextColor(0);doc.setFontSize(11);y+=8;
+  doc.setFont(undefined,'bold');doc.text('En concepto de:',16,y);doc.setFont(undefined,'normal');doc.text(concepto||'',56,y);y+=8;
+  doc.setFont(undefined,'bold');doc.text('Nombre del Alumno/a:',16,y);doc.setFont(undefined,'normal');doc.text(a.nombre||'',62,y);y+=8;
+  doc.setFont(undefined,'bold');doc.text('Grado/Curso:',16,y);doc.setFont(undefined,'normal');doc.text(a.grado||'................',43,y);
+  doc.setFont(undefined,'bold');doc.text('Turno:',120,y);doc.setFont(undefined,'normal');doc.text(a.turno||'..............',135,y);y+=8;
+  doc.setFont(undefined,'bold');doc.text('Forma de Pago:',16,y);doc.setFont(undefined,'normal');doc.text('[   ] Efectivo       [   ] Transferencia / Giro',60,y);y+=9;
+  sng(y);y+=6;
+  doc.setFont(undefined,'bold');doc.setFontSize(10);doc.text('NOTA IMPORTANTE:',16,y);doc.setFont(undefined,'normal');doc.setFontSize(9);y+=6;
+  if(c.notaLegal){wrapTxt(c.notaLegal,108).forEach(l=>{doc.text(l,16,y);y+=5;});}
+  else{doc.setDrawColor(205);doc.line(16,y,194,y);y+=6;doc.line(16,y,194,y);y+=6;}
+  y+=2;sng(y);y+=24;
+  doc.setDrawColor(120);doc.line(26,y,88,y);doc.line(122,y,184,y);y+=5;
+  doc.setFontSize(9);cenBetween(doc,26,88,'Firma y Aclaración',y);cenBetween(doc,122,184,'Firma y Aclaración',y);y+=5;
+  doc.setFont(undefined,'bold');cenBetween(doc,26,88,'Secretario/a',y,true);cenBetween(doc,122,184,'Director/a',y,true);
+  doc.save('Recibo_'+nro.replace(/-/g,'')+'_'+(a.nombre||'alumno').replace(/ /g,'_')+'.pdf');
+  toast('🧾 Recibo N° '+nro+' generado');
 }
+function cenBetween(doc,x1,x2,str,y,bold){const KK=72/25.4;doc.setFont(undefined,bold?'bold':'normal');const w=(str.length*(bold?0.56:0.52)*(bold?9:9))/KK;doc.text(str,(x1+x2)/2-w/2,y);}
 
 /* ============================================================
    HELPERS UI
