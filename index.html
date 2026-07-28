@@ -1967,8 +1967,8 @@ function jpegSize(bin){
   }
   return {w:0,h:0};
 }
-function makeDoc(){
-  const K=72/25.4, PW=210, PH=297; // A4 mm
+function makeDoc(landscape){
+  const K=72/25.4, PW=landscape?297:210, PH=landscape?210:297; // A4 mm
   const ops=[]; // graphics operators (content stream)
   const imgs=[]; // imágenes XObject (JPEG)
   let fillC=[0,0,0], textC=[0,0,0], stroke=[0.6,0.6,0.6], size=12, bold=false;
@@ -2059,7 +2059,63 @@ function pdfHeader(doc,titulo){
   doc.setFontSize(11);doc.setFont(undefined,'normal');doc.text(titulo,tx,21);
   doc.setTextColor(0);
 }
-function pdfBoletin(id){pdfBoletinGen(id,DB.notas,'Boletín de calificación final','Boletin_Final');}
+function pdfBoletin(id){
+  const a=alumno(id)||{};const c=colegio()||{};const doc=makeDoc(true);
+  const PW=297,KK=72/25.4;
+  const wmm=(s,sz,b)=>(String(s).length*(b?0.56:0.52)*sz)/KK;
+  const cen=(s,y,sz,b,cx)=>{doc.setFontSize(sz);doc.setFont(undefined,b?'bold':'normal');doc.text(String(s),Math.max(6,(cx||PW/2)-wmm(s,sz,b)/2),y);};
+  const mats=DB.materias.filter(m=>m.colegioId===c.id&&m.grado===a.grado);
+  const etapas=['1er Periodo','2do Periodo','3er Periodo'];
+  const notaDe=(mid,per)=>{const n=DB.notas.find(x=>x.alumnoId===id&&x.materiaId===mid&&x.periodo===per);return n?n.nota:null;};
+  const finalDe=(mid)=>{const v=etapas.map(e=>notaDe(mid,e)).filter(x=>x!=null);return v.length?Math.round(v.reduce((s,x)=>s+x,0)/v.length):null;};
+  let y=14;
+  cen((c.nombre||'Institución Educativa').toUpperCase(),y,15,true);y+=7;
+  cen('BOLETÍN DE CALIFICACIONES E INFORMES DESCRIPTIVOS',y,13,true);y+=6;
+  cen('Ministerio de Educación y Ciencias · Educación Escolar Básica (Paraguay)',y,9,false);y+=11;
+  doc.setFontSize(11);
+  const kvp=(k,v,x,vx)=>{doc.setFont(undefined,'bold');doc.text(k,x,y);doc.setFont(undefined,'normal');doc.text(String(v||''),vx,y);};
+  kvp('Alumno/a:',a.nombre,14,42); kvp('Grado:',a.grado,150,168); kvp('Año:',String(new Date().getFullYear()),214,228); y+=7;
+  kvp('Institución:',c.nombre,14,47); kvp('Ciudad:',c.ciudad,150,172); y+=9;
+  // ---- tabla áreas × etapas ----
+  const ex=[12,110,135,160,185,215,250,285];
+  const heads=['','1ra Etapa','2da Etapa','3ra Etapa','Calificación Final','Complementario','Regularización'];
+  const cx=i=>(ex[i]+ex[i+1])/2;
+  const ty=y,hh=12,rh=8.4;
+  doc.setFillColor(232,238,250);doc.rect(12,ty,273,hh,'F');
+  doc.setFont(undefined,'bold');doc.setFontSize(9);doc.text("ÁREAS · Mbo'epykuéra",15,ty+7.5);
+  for(let i=1;i<7;i++)cen(heads[i],ty+7.5,8,true,cx(i));
+  let ry=ty+hh;
+  mats.forEach(m=>{
+    doc.setFont(undefined,'normal');doc.setFontSize(8.5);doc.text((m.nombre||'').toUpperCase().slice(0,50),15,ry+5.6);
+    [notaDe(m.id,etapas[0]),notaDe(m.id,etapas[1]),notaDe(m.id,etapas[2]),finalDe(m.id),null,null].forEach((v,i)=>{if(v!=null)cen(String(v),ry+5.6,i===3?11:10,i===3,cx(i+1));});
+    ry+=rh;
+  });
+  if(!mats.length){doc.setFontSize(9);doc.text('Sin calificaciones cargadas para este grado.',16,ry+5.6);ry+=rh;}
+  doc.setDrawColor(120);
+  doc.line(12,ty,285,ty);doc.line(12,ty+hh,285,ty+hh);
+  for(let r=1;r<=Math.max(mats.length,1);r++)doc.line(12,ty+hh+r*rh,285,ty+hh+r*rh);
+  ex.forEach(x=>doc.line(x,ty,x,ry));
+  y=ry+9;
+  // ---- resumen ----
+  const finals=mats.map(m=>finalDe(m.id)).filter(v=>v!=null);
+  const total=finals.reduce((s,v)=>s+v,0);
+  const term=finals.length?(total/finals.length).toFixed(2):'—';
+  const pasa=finals.length?(Number(term)>=NOTA_APRUEBA?'SÍ':'NO'):'—';
+  doc.setFontSize(10.5);
+  doc.setFont(undefined,'bold');doc.text('Total de puntos:',14,y);doc.setFont(undefined,'normal');doc.text(String(finals.length?total:'—'),62,y);
+  doc.setFont(undefined,'bold');doc.text('Término medio general:',108,y);doc.setFont(undefined,'normal');doc.text(String(term),170,y);
+  doc.setFont(undefined,'bold');doc.text('Pasa de grado:',205,y);doc.setFont(undefined,'normal');doc.text(pasa,242,y);y+=9;
+  const faltas=DB.asistencia.filter(x=>x.alumnoId===id&&x.estado==='ausente').length;
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.text('Asistencia (faltas):',14,y);doc.setFont(undefined,'normal');doc.text(String(faltas),54,y);y+=8;
+  doc.setFont(undefined,'bold');doc.text('Observaciones:',14,y);y+=5;doc.setDrawColor(205);doc.line(14,y,285,y);y+=6;doc.line(14,y,285,y);
+  // ---- firmas ----
+  const sy=190;
+  doc.setDrawColor(120);doc.line(30,sy,92,sy);doc.line(118,sy,180,sy);doc.line(208,sy,270,sy);
+  cen('Profesor/a',sy+5,9,false,61);cen('Director/a',sy+5,9,false,149);cen('Madre, Padre o Encargado',sy+5,9,false,239);
+  doc.setFontSize(8);doc.setTextColor(120);doc.text('Escala MEC 1 a 5 · aprueba desde '+NOTA_APRUEBA+' · '+colName()+' · '+fmtFecha(hoy()),14,204);doc.setTextColor(0);
+  doc.save('Boletin_'+(a.nombre||'alumno').replace(/ /g,'_')+'.pdf');
+  toast('📄 Boletín generado');
+}
 function pdfBoletinParcial(id){pdfBoletinGen(id,DB.notasParcial,'Boletín de examen parcial','Boletin_Parcial');}
 function pdfBoletinGen(id,fuente,titulo,prefijo){
   const doc=makeDoc();
