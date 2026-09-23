@@ -1,0 +1,52 @@
+name: Compilar APK KEVANIX
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar Android SDK (usa el ya instalado en el runner)
+        run: |
+          set -e
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "SDK en: $SDK"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SM" ]; then SM="$(command -v sdkmanager || true)"; fi
+          echo "sdkmanager: $SM"
+          yes | "$SM" --licenses >/dev/null 2>&1 || true
+          "$SM" "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
+          echo "sdk.dir=$SDK" > local.properties || true
+
+      - name: Compilar APK
+        run: |
+          set -e
+          SETTINGS=$(find . -name settings.gradle | head -1)
+          if [ -z "$SETTINGS" ]; then echo "ERROR: no se encontro settings.gradle"; ls -R; exit 1; fi
+          ROOT=$(dirname "$SETTINGS")
+          echo "Proyecto en: $ROOT"
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "sdk.dir=$SDK" > "$ROOT/local.properties"
+          cd "$ROOT"
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle.zip
+          unzip -q -o /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.7/bin/gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Subir el APK generado
+        uses: actions/upload-artifact@v4
+        with:
+          name: KEVANIX-APK
+          path: '**/app-debug.apk'
+          if-no-files-found: error
