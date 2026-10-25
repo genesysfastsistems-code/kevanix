@@ -29,7 +29,7 @@ jobs:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
-          if ! node -e "const j=require(process.argv[1]);if(!j.client_email||!j.private_key)throw new Error('json');console.log('Cuenta:',j.client_email,'Proyecto:',j.project_id)" "$RUNNER_TEMP/sa.json"; then
+          if ! node -e "const j=require(process.argv[1]);if(!j.client_email||!j.private_key)throw new Error('json');console.log('::notice::Cuenta '+j.client_email+' proyecto '+j.project_id)" "$RUNNER_TEMP/sa.json"; then
             echo "::error::El secreto FIREBASE_SERVICE_ACCOUNT no es un JSON valido de cuenta de servicio (copia el archivo .json completo)."; exit 1; fi
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           set +e
