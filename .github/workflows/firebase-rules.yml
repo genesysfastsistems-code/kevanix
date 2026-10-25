@@ -28,7 +28,19 @@ jobs:
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          echo "$SA" > "$RUNNER_TEMP/sa.json"
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          if ! node -e "const j=require(process.argv[1]);if(!j.client_email||!j.private_key)throw new Error('json');console.log('Cuenta:',j.client_email,'Proyecto:',j.project_id)" "$RUNNER_TEMP/sa.json"; then
+            echo "::error::El secreto FIREBASE_SERVICE_ACCOUNT no es un JSON valido de cuenta de servicio (copia el archivo .json completo)."; exit 1; fi
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          npx --yes firebase-tools@13 deploy --only firestore:rules --project kevanix-88f77 --non-interactive
+          set +e
+          npx --yes firebase-tools@13 deploy --only firestore:rules --project kevanix-88f77 --non-interactive --debug > "$RUNNER_TEMP/out.txt" 2>&1
+          rc=$?
+          set -e
           rm -f "$RUNNER_TEMP/sa.json"
+          tail -n 40 "$RUNNER_TEMP/out.txt"
+          if [ $rc -ne 0 ]; then
+            msg=$(grep -E "Error|error:|PERMISSION|denied|disabled|has not been used|compil|L[0-9]+:" "$RUNNER_TEMP/out.txt" | grep -v -i "private_key" | tail -n 8 | tr '\n' ' ' | cut -c1-900)
+            echo "::error::$msg"
+            exit 1
+          fi
+          echo "::notice::Reglas de Firestore publicadas correctamente"
