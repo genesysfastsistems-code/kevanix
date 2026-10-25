@@ -14,7 +14,7 @@ Ideal si no querés instalar programas. Usa GitHub Actions (gratis).
 
 1. Creá una cuenta en https://github.com (si no tenés).
 2. Creá un repositorio nuevo (por ejemplo `edugestion`).
-3. Subí **todo el contenido de la carpeta `android/`** a ese repositorio.
+3. Subí **todo el contenido de este proyecto** a ese repositorio.
    - Podés arrastrar los archivos desde la web de GitHub ("Add file" → "Upload files").
 4. Andá a la pestaña **Actions** del repositorio. Vas a ver el flujo
    **"Compilar APK KEVANIX"** ejecutándose solo (o tocá "Run workflow").
@@ -22,7 +22,7 @@ Ideal si no querés instalar programas. Usa GitHub Actions (gratis).
    la sección **Artifacts** → `KEVANIX-APK-debug`.
 6. Pasá ese `.apk` a tu celular e instalalo (ver "Instalar el APK" más abajo).
 
-> El archivo `.github/workflows/build-apk.yml` ya está incluido y hace todo esto automáticamente.
+> El archivo `.github/workflows/main.yml` ya está incluido y hace todo esto automáticamente.
 
 ---
 
@@ -30,7 +30,7 @@ Ideal si no querés instalar programas. Usa GitHub Actions (gratis).
 
 1. Descargá e instalá **Android Studio** (gratis): https://developer.android.com/studio
    - Android Studio descarga solo el SDK que falta.
-2. Abrí Android Studio → **Open** → elegí la carpeta `android/`.
+2. Abrí Android Studio → **Open** → elegí la carpeta del proyecto.
 3. Esperá a que sincronice (Gradle Sync). La primera vez tarda unos minutos.
 4. Menú **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
 5. Cuando termine, aparece un aviso "locate" → ahí está tu `app-debug.apk`.
@@ -44,7 +44,6 @@ Requisitos: **JDK 17+** y el **Android SDK** instalado, con la variable
 `ANDROID_HOME` (o `ANDROID_SDK_ROOT`) apuntando a él.
 
 ```bash
-cd android
 ./build-apk.sh          # o: ./gradlew assembleDebug
 ```
 
@@ -69,11 +68,11 @@ El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
 
 | Rol | Usuario | Contraseña |
 |-----|---------|-----------|
-| 👑 Dueño / Super usuario | `dueno` | `1234` |
-| 🏫 Administración | `admin` | `1234` |
-| 👩‍🏫 Docente | `docente` | `1234` |
-| 👨‍👩‍👧 Familia | `familia` | `1234` |
-| 🎒 Alumno | `alumno` | `1234` |
+| 👑 Dueño / Super usuario | `kevanix` | `123456` |
+| 🏫 Administración | `admin` | `123456` |
+| 👩‍🏫 Docente | `docente` | `123456` |
+| 👨‍👩‍👧 Familia | `familia` | `123456` |
+| 🎒 Alumno | `alumno` | `123456` |
 
 ---
 
@@ -87,11 +86,12 @@ El APK queda en `app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
-## ⚠️ Importante sobre los datos
+## 🌐 Cómo funciona el APK
 
-Esta versión guarda todo **en el propio teléfono** (almacenamiento local del WebView).
-Es perfecta para demostración, uso de un solo dispositivo o piloto.
-Para que varios usuarios compartan la misma información en tiempo real
-(por ejemplo, que la familia vea las notas que cargó el docente desde otro celular),
-hace falta agregar un **servidor / base de datos en la nube**. Ese es el siguiente
-paso natural si el proyecto avanza — avisame y lo encaramos.
+- El APK abre la versión **en línea**: `https://educativo.kevanix.com/` (definido en `MainActivity.java`).
+  Cada vez que publicás la web, el APK se actualiza solo (no hace falta reinstalar).
+- Solo hace falta generar un APK nuevo si cambia `MainActivity.java` o el ícono/nombre.
+  **v1.1 (versionCode 2) requiere reinstalar** para habilitar: subir fotos/archivos,
+  pantalla sin conexión y abrir automáticamente los PDF descargados.
+- Los datos están en la nube (Firebase): todos los celulares ven la misma información en tiempo real.
+- `app/src/main/assets/www/index.html` es una copia de respaldo de la app; `offline.html` es la pantalla sin internet.

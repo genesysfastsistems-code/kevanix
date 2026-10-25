@@ -1,0 +1,75 @@
+rules_version = '2';
+// KEVANIX Sistema Educativo — reglas v1.2
+// Pegar completo en Firebase → Firestore Database → Reglas → Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function perfil()    { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function rol()       { return perfil().rol; }
+    function miColegio() { return perfil().colegioId; }
+    function esSuper()   { return request.auth != null && rol() == 'superadmin'; }
+    function esAdmin()   { return request.auth != null && rol() == 'admin'; }
+
+    // ---------- Registro de colegios, pagos de membresía y configuración ----------
+    // El admin solo puede modificar SU colegio y nunca su plan, vencimiento ni bloqueo.
+    function regAdminOk() {
+      let mi = miColegio();
+      let antes = resource.data.get('cols', {}).get(mi, {});
+      let despues = request.resource.data.get('cols', {}).get(mi, {});
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cols'])
+        && request.resource.data.get('cols', {}).diff(resource.data.get('cols', {})).affectedKeys().hasOnly([mi])
+        && antes.size() > 0
+        && despues.get('id', null)             == antes.get('id', null)
+        && despues.get('plan', null)           == antes.get('plan', null)
+        && despues.get('membresiaVence', null) == antes.get('membresiaVence', null)
+        && despues.get('activo', null)         == antes.get('activo', null)
+        && despues.get('bloqueado', null)      == antes.get('bloqueado', null);
+    }
+    match /kevanix/{doc} {
+      allow read:   if request.auth != null && (doc != 'pagos' || esSuper());
+      allow create, delete: if esSuper();
+      allow update: if esSuper() || (esAdmin() && doc == 'registry' && regAdminOk());
+    }
+
+    // ---------- Datos públicos del colegio (nombre, logo, WhatsApp, cupos) ----------
+    match /kevanix_public/{cid} {
+      allow read:  if true;
+      allow write: if esSuper() || (esAdmin() && miColegio() == cid);
+    }
+
+    // ---------- Perfiles y accesos ----------
+    match /users/{uid} {
+      allow read:   if request.auth != null && (request.auth.uid == uid || esSuper()
+                    || (esAdmin() && resource.data.colegioId == miColegio()));
+      allow create: if esSuper() || (esAdmin() && request.resource.data.colegioId == miColegio()
+                    && request.resource.data.rol != 'superadmin' && request.resource.data.rol != 'admin');
+      allow update, delete: if esSuper() || (esAdmin() && resource.data.colegioId == miColegio()
+                    && resource.data.rol != 'superadmin');
+    }
+
+    // ---------- Datos de cada colegio ----------
+    // Cada documento indica su colección en el campo "coll" (los del formato viejo usan su nombre).
+    function collDe(docId, d) { return d.get('coll', docId); }
+    function puedeEscribir(c, docId) {
+      return rol() == 'admin' || rol() == 'superadmin'
+        || (rol() == 'docente' && (c in ['notas','notasParcial','asistencia','tareas','boletinTarea','observaciones',
+                                         'examenes','comunicados','eventos','recursos','iniAlumnos','iniLibreta','iniDocentes']
+                                   || docId.matches('(file|iniGal)_.*')))
+        || (rol() == 'alumno'  && (c == 'tareas' || docId.matches('file_.*')))
+        || (rol() == 'familia' && (c == 'pagosInf' || docId.matches('file_.*')));
+    }
+    function colOk(cid) { return request.auth != null && (esSuper() || miColegio() == cid); }
+
+    match /kevanix_colegios/{cid}/data/{doc} {
+      allow read:           if colOk(cid);
+      allow create, update: if colOk(cid) && puedeEscribir(collDe(doc, request.resource.data), doc);
+      allow delete:         if colOk(cid) && puedeEscribir(collDe(doc, resource.data), doc);
+
+      // Inscripción online: la familia (sin usuario) solo puede CREAR una solicitud nueva.
+      allow create: if doc.matches('insc_.*')
+        && request.resource.data.keys().hasOnly(['tipoDoc','estado','fecha','creado','datos'])
+        && request.resource.data.tipoDoc == 'inscripcion'
+        && request.resource.data.estado == 'pendiente';
+    }
+  }
+}
