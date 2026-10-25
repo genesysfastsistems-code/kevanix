@@ -3180,7 +3180,7 @@ function chequearLimite(extra){const l=limiteAlumnos();if(!l)return true;const n
     <button class="btn ok" onclick="closeModal();waUpgrade()">💬 Solicitar cambio de plan</button></div>`);return false;}
   return true;}
 // WhatsApp de KEVANIX para pedidos de cambio de plan (completar con tu número, ej: 595981123456)
-const KEVANIX_WA='';
+const KEVANIX_WA='595972972059';
 function waUpgrade(mod){waTel(KEVANIX_WA,`Hola KEVANIX 👋, somos ${colName()} (plan ${planActual()}). Queremos ${mod?'habilitar el módulo "'+mod+'"':'ampliar nuestro plan'}.`);}
 function vBloqueado(el,v){
   const nec=PLAN_MIN[v]||'Premium';
