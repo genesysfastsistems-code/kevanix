@@ -37,6 +37,17 @@ service cloud.firestore {
       allow write: if esSuper() || (esAdmin() && miColegio() == cid);
     }
 
+    // ---------- Pedidos de demostración (portal /planes) ----------
+    // Cualquiera puede CREAR un pedido; solo el dueño lo lee y lo gestiona.
+    match /kevanix_leads/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['nombre','cargo','colegio','ciudad','alumnos','whatsapp','plan','mensaje','fecha','creado','estado','origen'])
+        && request.resource.data.estado == 'nuevo'
+        && request.resource.data.nombre is string && request.resource.data.nombre.size() > 0 && request.resource.data.nombre.size() <= 120
+        && request.resource.data.colegio is string && request.resource.data.colegio.size() <= 150
+        && request.resource.data.mensaje is string && request.resource.data.mensaje.size() <= 1500;
+      allow read, update, delete: if esSuper();
+    }
+
     // ---------- Perfiles y accesos ----------
     match /users/{uid} {
       allow read:   if request.auth != null && (request.auth.uid == uid || esSuper()
