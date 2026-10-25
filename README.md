@@ -2,15 +2,14 @@
 
 App escolar (web + APK Android) con Firebase. Publicada en **https://educativo.kevanix.com**.
 
-## ⚠️ Pasos al actualizar a v1.2 (en este orden)
+## 🚀 Publicación automática
 
-1. **Firebase → Firestore → Reglas:** reemplazá todo por el contenido de [`firestore.rules`](firestore.rules) y tocá **Publicar**.
-2. **Enseguida, subí los archivos a GitHub** (publica la web y compila el APK). Hacé 1 y 2 juntos, uno detrás del otro.
-3. **Entrá una vez como dueño (`kevanix`)**: el sistema migra solo el registro de colegios al formato nuevo.
-4. **Cada colegio migra sus datos solo** cuando su administrador entra por primera vez.
-5. En el panel del dueño: **eliminá el colegio demo** y **cambiá tu contraseña** (aparece un aviso rojo mientras exista).
-6. **Revisá el plan de cada colegio**: ahora los planes Básica y Media limitan alumnos y módulos de verdad. Si querés que un cliente siga con todo, ponelo en Premium/Pro/Máximo.
-7. Opcional: en `index.html` completá `KEVANIX_WA` con tu WhatsApp para que los colegios te pidan cambios de plan.
+Cada `push` a `main`:
+- publica la web en **educativo.kevanix.com** (GitHub Pages),
+- compila el APK (*Actions → Artifacts → KEVANIX-APK*),
+- publica `firestore.rules` en Firebase (secreto `FIREBASE_SERVICE_ACCOUNT`, rol *Administrador de Firebase*).
+
+Pendientes manuales: eliminar el colegio demo, cambiar la clave del dueño, revisar el plan de cada colegio y completar `KEVANIX_WA` en `index.html`.
 
 ## Novedades v1.2
 
