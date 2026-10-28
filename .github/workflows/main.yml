@@ -5,6 +5,9 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -50,3 +53,13 @@ jobs:
           name: KEVANIX-APK
           path: '**/app-debug.apk'
           if-no-files-found: error
+
+      - name: Publicar el APK en Releases (descarga directa)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=$(find . -name app-debug.apk | head -1)
+          cp "$APK" KEVANIX-Educativo.apk
+          gh release view apk --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create apk --repo "$GITHUB_REPOSITORY" --title "KEVANIX Educativo — APK" --notes "APK de Android generado automáticamente. Descarga: https://github.com/$GITHUB_REPOSITORY/releases/download/apk/KEVANIX-Educativo.apk"
+          gh release upload apk KEVANIX-Educativo.apk --clobber --repo "$GITHUB_REPOSITORY"
